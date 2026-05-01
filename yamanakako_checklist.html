@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>山中湖チェックリスト</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; background: #f5f5f3; color: #1a1a1a; }
+.app { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+h1 { font-size: 18px; font-weight: 500; margin-bottom: 1.25rem; color: #1a1a1a; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+.tabs { display: flex; gap: 8px; flex: 1; }
+.tab { flex: 1; padding: 10px 12px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #666; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.tab.active { background: #f0f0ee; color: #1a1a1a; border-color: #999; }
+.tab:hover:not(.active) { background: #f0f0ee; }
+.edit-toggle { margin-left: 12px; padding: 8px 14px; font-size: 12px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #666; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+.edit-toggle:hover { background: #f0f0ee; }
+.edit-toggle.active { background: #f0f0ee; color: #1a1a1a; border-color: #999; }
+.progress-bar-wrap { background: #e8e8e6; border-radius: 99px; height: 6px; margin-bottom: 1.5rem; overflow: hidden; }
+.progress-bar { height: 100%; border-radius: 99px; transition: width 0.3s; }
+.arrive-color { background: #1D9E75; }
+.leave-color { background: #D85A30; }
+.progress-label { font-size: 12px; color: #888; margin-bottom: 6px; }
+.section { margin-bottom: 1.5rem; }
+.section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-left: 4px; }
+.section-title { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.06em; flex: 1; }
+.section-title-input { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.06em; border: 0.5px solid #ccc; border-radius: 4px; padding: 2px 6px; background: white; flex: 1; outline: none; }
+.edit-section-btns { display: none; gap: 4px; }
+.editing .edit-section-btns { display: flex; }
+.small-btn { padding: 3px 8px; font-size: 11px; border: 0.5px solid #ccc; border-radius: 4px; background: white; color: #666; cursor: pointer; }
+.small-btn.danger:hover { background: #FAECE7; color: #993C1D; border-color: #D85A30; }
+.item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 0.5px solid transparent; margin-bottom: 4px; background: white; transition: opacity 0.15s; }
+.item:not(.editing-item):hover { background: #f0f0ee; }
+.item.checked { opacity: 0.5; }
+.checkbox { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #ccc; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; transition: all 0.15s; }
+.arrive-tab .item.checked .checkbox { background: #1D9E75; border-color: #1D9E75; }
+.leave-tab .item.checked .checkbox { background: #D85A30; border-color: #D85A30; }
+.checkmark { display: none; color: white; font-size: 11px; font-weight: 600; }
+.item.checked .checkmark { display: block; }
+.item-body { flex: 1; min-width: 0; }
+.item-text { font-size: 14px; color: #1a1a1a; line-height: 1.5; }
+.item.checked .item-text { text-decoration: line-through; color: #aaa; }
+.item-note { font-size: 12px; color: #888; margin-top: 2px; }
+.item.checked .item-note { text-decoration: line-through; }
+.item-edit-controls { display: none; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.item-edit-controls input { font-size: 13px; border: 0.5px solid #ccc; border-radius: 4px; padding: 4px 8px; background: white; color: #1a1a1a; outline: none; width: 100%; }
+.item-actions { display: none; flex-direction: column; gap: 4px; align-items: center; flex-shrink: 0; }
+.drag-handle { cursor: grab; color: #bbb; font-size: 14px; padding: 2px 4px; line-height: 1; }
+.drag-handle:active { cursor: grabbing; }
+.item-del { padding: 3px 6px; font-size: 11px; border: 0.5px solid #ccc; border-radius: 4px; background: transparent; color: #888; cursor: pointer; }
+.item-del:hover { background: #FAECE7; color: #993C1D; border-color: #D85A30; }
+.editing .item-actions { display: flex; }
+.editing .item .item-body { display: none; }
+.editing .item .item-edit-controls { display: flex; }
+.editing .item { cursor: default; background: white !important; opacity: 1 !important; border: 0.5px solid #e0e0e0; }
+.editing .checkbox { display: none; }
+.add-item-btn { display: none; width: 100%; padding: 8px; font-size: 13px; color: #888; background: transparent; border: 0.5px dashed #ccc; border-radius: 8px; cursor: pointer; margin-top: 4px; }
+.add-item-btn:hover { background: #f0f0ee; }
+.editing .add-item-btn { display: block; }
+.add-section-btn { display: none; width: 100%; padding: 8px; font-size: 13px; color: #888; background: transparent; border: 0.5px dashed #ccc; border-radius: 8px; cursor: pointer; margin-top: 8px; }
+.add-section-btn:hover { background: #f0f0ee; }
+.editing .add-section-btn { display: block; }
+.all-done { text-align: center; padding: 1rem; font-size: 14px; color: #888; display: none; }
+.reset-btn { padding: 8px 16px; font-size: 13px; color: #888; background: transparent; border: 0.5px solid #ccc; border-radius: 8px; cursor: pointer; }
+.reset-btn:hover { background: #f0f0ee; }
+.bottom-bar { display: flex; gap: 8px; margin-top: 1rem; align-items: center; }
+.item.drag-over { border: 0.5px solid #999 !important; background: #f0f0ee !important; }
+.sync-status { font-size: 11px; color: #aaa; margin-left: auto; }
+.sync-status.syncing { color: #1D9E75; }
+.sync-status.error { color: #D85A30; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('arrive')">到着時にやること</button>
+      <button class="tab" onclick="switchTab('leave')">帰る時にやること</button>
+    </div>
+    <button class="edit-toggle" id="editToggle" onclick="toggleEdit()">編集</button>
+  </div>
+
+  <div id="arrive-panel" class="arrive-tab">
+    <p class="progress-label" id="arrive-label"></p>
+    <div class="progress-bar-wrap arrive"><div class="progress-bar arrive-color" id="arrive-bar" style="width:0%"></div></div>
+    <div id="arrive-sections"></div>
+    <button class="add-section-btn" onclick="addSection('arrive')">+ セクションを追加</button>
+    <div class="all-done" id="arrive-done">すべて完了！ゆっくり楽しんでください ☆</div>
+    <div class="bottom-bar">
+      <button class="reset-btn" onclick="resetPanel('arrive')">チェックをリセット</button>
+      <span class="sync-status" id="arrive-sync"></span>
+    </div>
+  </div>
+
+  <div id="leave-panel" class="leave-tab" style="display:none">
+    <p class="progress-label" id="leave-label"></p>
+    <div class="progress-bar-wrap leave"><div class="progress-bar leave-color" id="leave-bar" style="width:0%"></div></div>
+    <div id="leave-sections"></div>
+    <button class="add-section-btn" onclick="addSection('leave')">+ セクションを追加</button>
+    <div class="all-done" id="leave-done">すべて完了！気をつけてお帰りください ☆</div>
+    <div class="bottom-bar">
+      <button class="reset-btn" onclick="resetPanel('leave')">チェックをリセット</button>
+      <span class="sync-status" id="leave-sync"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbyjGEvoRmbFW6-0HTO1yckbvbl9uD1uF0Y5B7wozzGBp94ZH2EYnirRc0Je3NZEVq8E/exec';
+
+const defaultData = {
+  arrive: [
+    { title: '電気・ガス・水道', items: [
+      { text: 'ブレーカーを上げる', note: '' },
+      { text: 'プロパンガスの元栓を開ける', note: '' },
+      { text: '水道の元栓を開ける', note: '' },
+      { text: '給湯器の電源を入れる', note: 'お湯が出るまで少し時間がかかります' },
+    ]},
+    { title: '換気・清掃', items: [
+      { text: '窓を開けて換気する', note: '1〜2時間閉め切っていた空気を入れ替える' },
+      { text: '虫・カビ・異臭がないか確認する', note: '' },
+      { text: '冷蔵庫の電源を入れる', note: '庫内のにおいも確認' },
+    ]},
+    { title: '設備確認', items: [
+      { text: 'トイレの水が流れるか確認する', note: '' },
+      { text: '水漏れ・異常がないか各所を確認する', note: '' },
+      { text: 'Wi-Fiルーターの電源を入れる', note: '' },
+      { text: 'ゴミ・不用品が残っていないか確認する', note: '前回帰る際に忘れたものがないか' },
+    ]},
+  ],
+  leave: [
+    { title: '清掃', items: [
+      { text: 'テーブル・椅子・テーブルの下を水拭きする', note: '子供の食べこぼし対策・虫湧き防止' },
+      { text: 'キッチンのコンロ・調理台を拭く', note: '油汚れ・食材のカスを残さない' },
+      { text: 'シンクを洗い・水気を拭き取る', note: '' },
+      { text: 'ゴミをすべてまとめて捨てる（またはゴミ袋に密封）', note: '' },
+      { text: '排水口のゴミ受けを洗う', note: '' },
+      { text: '冷蔵庫の中身をすべて持ち帰る・処分する', note: '' },
+      { text: 'トイレを掃除する', note: '' },
+      { text: 'お風呂・洗面台を軽く掃除する', note: '' },
+      { text: '布団・シーツを片付ける（湿気対策）', note: '' },
+    ]},
+    { title: '電気・ガス・水道', items: [
+      { text: '給湯器の電源を切る', note: '' },
+      { text: 'プロパンガスの元栓を閉める', note: '' },
+      { text: '水道の元栓を閉める', note: '' },
+      { text: '冷蔵庫の電源を切る（長期不在の場合）', note: '' },
+      { text: '不要な電気をすべて消す', note: '' },
+      { text: 'ブレーカーを落とす（長期不在の場合）', note: '' },
+    ]},
+    { title: '戸締まり・その他', items: [
+      { text: '窓をすべて閉めて鍵をかける', note: '' },
+      { text: '網戸が正しく閉まっているか確認する', note: '虫の侵入防止' },
+      { text: 'Wi-Fiルーターの電源を切る', note: '' },
+      { text: '忘れ物がないか全室確認する', note: '子供のおもちゃなど特に注意' },
+      { text: '玄関ドアを施錠する', note: '' },
+    ]},
+  ]
+};
+
+let data = JSON.parse(JSON.stringify(defaultData));
+let checked = { arrive: {}, leave: {} };
+let isEditing = false;
+let currentTab = 'arrive';
+let dragSrc = null;
+let pollTimer = null;
+
+function setSync(tab, msg, cls) {
+  const el = document.getElementById(tab + '-sync');
+  el.textContent = msg;
+  el.className = 'sync-status' + (cls ? ' ' + cls : '');
+}
+
+async function loadFromSheet() {
+  try {
+    const res = await fetch(API_URL);
+    const rows = await res.json();
+    if (!rows || rows.length === 0) {
+      await saveToSheet();
+      return;
+    }
+    const newData = { arrive: [], leave: [] };
+    const newChecked = { arrive: {}, leave: {} };
+    const secMap = { arrive: {}, leave: {} };
+    rows.forEach(row => {
+      const tab = row.tab;
+      if (!newData[tab]) return;
+      if (!secMap[tab][row.section]) {
+        secMap[tab][row.section] = { title: row.section, items: [] };
+        newData[tab].push(secMap[tab][row.section]);
+      }
+      const si = newData[tab].indexOf(secMap[tab][row.section]);
+      const ii = secMap[tab][row.section].items.length;
+      secMap[tab][row.section].items.push({ text: row.item, note: row.note || '' });
+      if (row.checked === 'TRUE' || row.checked === true) {
+        newChecked[tab][tab + '-' + si + '-' + ii] = true;
+      }
+    });
+    data = newData;
+    checked = newChecked;
+    render('arrive');
+    render('leave');
+  } catch(e) {
+    setSync(currentTab, '読み込みエラー', 'error');
+  }
+}
+
+async function saveToSheet() {
+  const rows = [];
+  ['arrive', 'leave'].forEach(tab => {
+    data[tab].forEach((sec, si) => {
+      sec.items.forEach((item, ii) => {
+        const key = tab + '-' + si + '-' + ii;
+        rows.push([tab, sec.title, item.text, item.note || '', checked[tab][key] ? 'TRUE' : '']);
+      });
+    });
+  });
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'saveAll', rows }),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+  } catch(e) {}
+}
+
+async function setCheckedOnSheet(tab, key, val) {
+  const parts = key.split('-');
+  const si = parseInt(parts[1]);
+  const ii = parseInt(parts[2]);
+  const sec = data[tab][si];
+  const item = sec.items[ii];
+  setSync(tab, '同期中…', 'syncing');
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'setChecked', tab, section: sec.title, item: item.text, checked: val }),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    setSync(tab, '同期済み', '');
+    setTimeout(() => setSync(tab, '', ''), 2000);
+  } catch(e) {
+    setSync(tab, '同期エラー', 'error');
+  }
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(() => { if (!isEditing) loadFromSheet(); }, 30000);
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', (i === 0 && tab === 'arrive') || (i === 1 && tab === 'leave'));
+  });
+  document.getElementById('arrive-panel').style.display = tab === 'arrive' ? 'block' : 'none';
+  document.getElementById('leave-panel').style.display = tab === 'leave' ? 'block' : 'none';
+}
+
+function toggleEdit() {
+  isEditing = !isEditing;
+  const btn = document.getElementById('editToggle');
+  btn.textContent = isEditing ? '完了' : '編集';
+  btn.classList.toggle('active', isEditing);
+  if (!isEditing) {
+    saveEdits();
+    saveToSheet();
+  }
+  render('arrive');
+  render('leave');
+}
+
+function saveEdits() {
+  ['arrive', 'leave'].forEach(tab => {
+    const sections = document.querySelectorAll('#' + tab + '-sections .section');
+    data[tab] = [];
+    sections.forEach(sec => {
+      const titleInput = sec.querySelector('.section-title-input');
+      const title = titleInput ? titleInput.value : sec.querySelector('.section-title').textContent;
+      const items = [];
+      sec.querySelectorAll('.item').forEach(itemEl => {
+        const inputs = itemEl.querySelectorAll('.item-edit-controls input');
+        if (inputs.length >= 1) items.push({ text: inputs[0].value, note: inputs[1] ? inputs[1].value : '' });
+      });
+      data[tab].push({ title, items });
+    });
+    checked[tab] = {};
+  });
+}
+
+function render(tab) {
+  const container = document.getElementById(tab + '-sections');
+  container.innerHTML = '';
+  data[tab].forEach((sec, si) => {
+    const secEl = document.createElement('div');
+    secEl.className = 'section' + (isEditing ? ' editing' : '');
+    secEl.dataset.si = si;
+    const hdr = document.createElement('div');
+    hdr.className = 'section-header';
+    if (isEditing) {
+      const inp = document.createElement('input');
+      inp.className = 'section-title-input';
+      inp.value = sec.title;
+      hdr.appendChild(inp);
+      const btns = document.createElement('div');
+      btns.className = 'edit-section-btns';
+      const delBtn = document.createElement('button');
+      delBtn.className = 'small-btn danger';
+      delBtn.textContent = '削除';
+      delBtn.onclick = () => { data[tab].splice(si, 1); render(tab); updateProgress(tab); };
+      btns.appendChild(delBtn);
+      hdr.appendChild(btns);
+    } else {
+      const titleEl = document.createElement('div');
+      titleEl.className = 'section-title';
+      titleEl.textContent = sec.title;
+      hdr.appendChild(titleEl);
+    }
+    secEl.appendChild(hdr);
+    sec.items.forEach((item, ii) => {
+      const key = tab + '-' + si + '-' + ii;
+      const itemEl = document.createElement('div');
+      itemEl.className = 'item' + (checked[tab][key] && !isEditing ? ' checked' : '') + (isEditing ? ' editing-item' : '');
+      itemEl.dataset.key = key;
+      itemEl.dataset.si = si;
+      itemEl.dataset.ii = ii;
+      if (!isEditing) {
+        itemEl.onclick = () => toggleCheck(tab, key);
+        const cb = document.createElement('div');
+        cb.className = 'checkbox';
+        const cm = document.createElement('span');
+        cm.className = 'checkmark';
+        cm.textContent = '✓';
+        cb.appendChild(cm);
+        itemEl.appendChild(cb);
+        const body = document.createElement('div');
+        body.className = 'item-body';
+        const txt = document.createElement('div');
+        txt.className = 'item-text';
+        txt.textContent = item.text;
+        body.appendChild(txt);
+        if (item.note) {
+          const note = document.createElement('div');
+          note.className = 'item-note';
+          note.textContent = item.note;
+          body.appendChild(note);
+        }
+        itemEl.appendChild(body);
+      } else {
+        itemEl.draggable = true;
+        itemEl.addEventListener('dragstart', onDragStart);
+        itemEl.addEventListener('dragover', onDragOver);
+        itemEl.addEventListener('drop', onDrop);
+        itemEl.addEventListener('dragend', onDragEnd);
+        const handle = document.createElement('div');
+        handle.className = 'drag-handle';
+        handle.textContent = '⠿';
+        itemEl.appendChild(handle);
+        const editCtrl = document.createElement('div');
+        editCtrl.className = 'item-edit-controls';
+        const inp1 = document.createElement('input');
+        inp1.placeholder = '項目名';
+        inp1.value = item.text;
+        const inp2 = document.createElement('input');
+        inp2.placeholder = 'メモ（任意）';
+        inp2.value = item.note || '';
+        editCtrl.appendChild(inp1);
+        editCtrl.appendChild(inp2);
+        itemEl.appendChild(editCtrl);
+        const actions = document.createElement('div');
+        actions.className = 'item-actions';
+        const delBtn = document.createElement('button');
+        delBtn.className = 'item-del';
+        delBtn.textContent = '削除';
+        delBtn.onclick = () => { data[tab][si].items.splice(ii, 1); render(tab); };
+        actions.appendChild(delBtn);
+        itemEl.appendChild(actions);
+      }
+      secEl.appendChild(itemEl);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-item-btn';
+    addBtn.textContent = '+ 項目を追加';
+    addBtn.onclick = () => { data[tab][si].items.push({ text: '新しい項目', note: '' }); render(tab); };
+    secEl.appendChild(addBtn);
+    container.appendChild(secEl);
+  });
+  updateProgress(tab);
+}
+
+function toggleCheck(tab, key) {
+  if (isEditing) return;
+  checked[tab][key] = !checked[tab][key];
+  setCheckedOnSheet(tab, key, checked[tab][key]);
+  updateProgress(tab);
+  render(tab);
+}
+
+function updateProgress(tab) {
+  let total = 0, done = 0;
+  data[tab].forEach((sec, si) => {
+    sec.items.forEach((_, ii) => {
+      total++;
+      if (checked[tab][tab + '-' + si + '-' + ii]) done++;
+    });
+  });
+  const pct = total ? Math.round(done / total * 100) : 0;
+  document.getElementById(tab + '-bar').style.width = pct + '%';
+  document.getElementById(tab + '-label').textContent = done + ' / ' + total + ' 完了';
+  const doneEl = document.getElementById(tab + '-done');
+  if (doneEl) doneEl.style.display = (done === total && total > 0 && !isEditing) ? 'block' : 'none';
+}
+
+function addSection(tab) {
+  saveEdits();
+  data[tab].push({ title: '新しいセクション', items: [{ text: '新しい項目', note: '' }] });
+  render(tab);
+}
+
+function resetPanel(tab) {
+  if (!confirm('チェックをすべてリセットしますか？')) return;
+  checked[tab] = {};
+  saveToSheet();
+  render(tab);
+}
+
+function onDragStart(e) { dragSrc = this; e.dataTransfer.effectAllowed = 'move'; }
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'));
+  if (this !== dragSrc) this.classList.add('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  if (this === dragSrc) return;
+  const tab = currentTab;
+  const srcSi = parseInt(dragSrc.dataset.si);
+  const srcIi = parseInt(dragSrc.dataset.ii);
+  const dstSi = parseInt(this.dataset.si);
+  const dstIi = parseInt(this.dataset.ii);
+  if (isNaN(srcSi) || isNaN(dstSi)) return;
+  saveEdits();
+  const [moved] = data[tab][srcSi].items.splice(srcIi, 1);
+  data[tab][dstSi].items.splice(dstIi, 0, moved);
+  render(tab);
+}
+function onDragEnd() {
+  document.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'));
+  dragSrc = null;
+}
+
+loadFromSheet();
+startPolling();
+</script>
+</body>
+</html>
