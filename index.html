@@ -8,7 +8,6 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; background: #f5f5f3; color: #1a1a1a; }
 .app { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
-h1 { font-size: 18px; font-weight: 500; margin-bottom: 1.25rem; color: #1a1a1a; }
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
 .tabs { display: flex; gap: 8px; flex: 1; }
 .tab { flex: 1; padding: 10px 12px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #666; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
@@ -17,6 +16,11 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 1.25rem; color: #1a1a1a; 
 .edit-toggle { margin-left: 12px; padding: 8px 14px; font-size: 12px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #666; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
 .edit-toggle:hover { background: #f0f0ee; }
 .edit-toggle.active { background: #f0f0ee; color: #1a1a1a; border-color: #999; }
+
+/* Animation scene */
+.scene-wrap { border-radius: 12px; overflow: hidden; margin-bottom: 1.25rem; }
+canvas.scene-canvas { width: 100%; height: 160px; display: block; }
+
 .progress-bar-wrap { background: #e8e8e6; border-radius: 99px; height: 6px; margin-bottom: 1.5rem; overflow: hidden; }
 .progress-bar { height: 100%; border-radius: 99px; transition: width 0.3s; }
 .arrive-color { background: #1D9E75; }
@@ -82,6 +86,9 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 1.25rem; color: #1a1a1a; 
   </div>
 
   <div id="arrive-panel" class="arrive-tab">
+    <div class="scene-wrap">
+      <canvas id="arrive-canvas" class="scene-canvas" width="680" height="160"></canvas>
+    </div>
     <p class="progress-label" id="arrive-label"></p>
     <div class="progress-bar-wrap arrive"><div class="progress-bar arrive-color" id="arrive-bar" style="width:0%"></div></div>
     <div id="arrive-sections"></div>
@@ -94,6 +101,9 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 1.25rem; color: #1a1a1a; 
   </div>
 
   <div id="leave-panel" class="leave-tab" style="display:none">
+    <div class="scene-wrap">
+      <canvas id="leave-canvas" class="scene-canvas" width="680" height="160"></canvas>
+    </div>
     <p class="progress-label" id="leave-label"></p>
     <div class="progress-bar-wrap leave"><div class="progress-bar leave-color" id="leave-bar" style="width:0%"></div></div>
     <div id="leave-sections"></div>
@@ -116,16 +126,20 @@ const defaultData = {
       { text: 'プロパンガスの元栓を開ける', note: '' },
       { text: '水道の元栓を開ける', note: '' },
       { text: '給湯器の電源を入れる', note: 'お湯が出るまで少し時間がかかります' },
+      { text: '床暖の電源ON', note: '使わない場合は1分後にOFFに戻す' },
     ]},
     { title: '換気・清掃', items: [
       { text: '窓を開けて換気する', note: '1〜2時間閉め切っていた空気を入れ替える' },
       { text: '虫・カビ・異臭がないか確認する', note: '' },
       { text: '冷蔵庫の電源を入れる', note: '庫内のにおいも確認' },
+      { text: 'ルンバに充電', note: '' },
+      { text: 'ルンバをかける', note: '' },
+      { text: '簡単に水拭き', note: '' },
+      { text: '布団を干す、または布団乾燥機', note: '' },
     ]},
     { title: '設備確認', items: [
       { text: 'トイレの水が流れるか確認する', note: '' },
       { text: '水漏れ・異常がないか各所を確認する', note: '' },
-      { text: 'Wi-Fiルーターの電源を入れる', note: '' },
       { text: 'ゴミ・不用品が残っていないか確認する', note: '前回帰る際に忘れたものがないか' },
     ]},
   ],
@@ -136,25 +150,32 @@ const defaultData = {
       { text: 'シンクを洗い・水気を拭き取る', note: '' },
       { text: 'ゴミをすべてまとめて捨てる（またはゴミ袋に密封）', note: '' },
       { text: '排水口のゴミ受けを洗う', note: '' },
-      { text: '冷蔵庫の中身をすべて持ち帰る・処分する', note: '' },
+      { text: '冷蔵庫の中身の確認（不要なら電源を切る）', note: '' },
       { text: 'トイレを掃除する', note: '' },
       { text: 'お風呂・洗面台を軽く掃除する', note: '' },
-      { text: '布団・シーツを片付ける（湿気対策）', note: '' },
+      { text: '風呂のドアを閉める', note: '' },
+      { text: '布団・シーツを立てかける', note: '湿気に注意' },
     ]},
     { title: '電気・ガス・水道', items: [
       { text: '給湯器の電源を切る', note: '' },
       { text: 'プロパンガスの元栓を閉める', note: '' },
       { text: '水道の元栓を閉める', note: '' },
-      { text: '冷蔵庫の電源を切る（長期不在の場合）', note: '' },
       { text: '不要な電気をすべて消す', note: '' },
       { text: 'ブレーカーを落とす（長期不在の場合）', note: '' },
     ]},
-    { title: '戸締まり・その他', items: [
+    { title: '戸締まり・忘れ物確認', items: [
       { text: '窓をすべて閉めて鍵をかける', note: '' },
       { text: '網戸が正しく閉まっているか確認する', note: '虫の侵入防止' },
-      { text: 'Wi-Fiルーターの電源を切る', note: '' },
-      { text: '忘れ物がないか全室確認する', note: '子供のおもちゃなど特に注意' },
+      { text: '忘れ物確認：奥の寝室', note: '子供のおもちゃなど特に注意' },
+      { text: '忘れ物確認：キッチン', note: '' },
+      { text: '忘れ物確認：リビング', note: '' },
+      { text: '忘れ物確認：畳の部屋', note: '' },
+      { text: '忘れ物確認：洗面台', note: '' },
+      { text: '忘れ物確認：ベランダ', note: '' },
       { text: '玄関ドアを施錠する', note: '' },
+    ]},
+    { title: 'その他', items: [
+      { text: '管理人に連絡', note: '槌屋さん：0555-72-9662' },
     ]},
   ]
 };
@@ -166,290 +187,550 @@ let currentTab = 'arrive';
 let dragSrc = null;
 let pollTimer = null;
 
-function setSync(tab, msg, cls) {
-  const el = document.getElementById(tab + '-sync');
-  el.textContent = msg;
-  el.className = 'sync-status' + (cls ? ' ' + cls : '');
+// ---- Animation state ----
+const aCanvas = document.getElementById('arrive-canvas');
+const aCtx = aCanvas.getContext('2d');
+const lCanvas = document.getElementById('leave-canvas');
+const lCtx = lCanvas.getContext('2d');
+const AW = 680, AH = 160;
+
+let animTime = 0;
+let broomX = -80, sweeping = false, prevArrivePct = 0;
+let truckOffX = 0, prevLeavePct = 0;
+
+function lerp(a,b,t){return a+(b-a)*Math.max(0,Math.min(1,t));}
+function norm(v,a,b){return Math.max(0,Math.min(1,(v-a)/(b-a)));}
+function hexLerp(c1,c2,t){
+  const p=i=>parseInt(c1.slice(i,i+2),16),q=i=>parseInt(c2.slice(i,i+2),16);
+  const h=v=>Math.round(v).toString(16).padStart(2,'0');
+  return '#'+h(lerp(p(1),q(1),t))+h(lerp(p(3),q(3),t))+h(lerp(p(5),q(5),t));
 }
 
-async function loadFromSheet() {
-  try {
-    const res = await fetch(API_URL);
-    const rows = await res.json();
-    if (!rows || rows.length === 0) {
-      await saveToSheet();
-      return;
+function drawArrive(p, t) {
+  const ctx = aCtx;
+  ctx.clearRect(0,0,AW,AH);
+  const groundY = AH * 0.62;
+
+  // Sky
+  const g = ctx.createLinearGradient(0,0,0,groundY);
+  g.addColorStop(0, hexLerp('#8a7a68','#4a9acc',p));
+  g.addColorStop(1, hexLerp('#b09a80','#90ccee',p));
+  ctx.fillStyle = g; ctx.fillRect(0,0,AW,groundY);
+
+  // Sun
+  const sr = lerp(6,22,p);
+  ctx.save(); ctx.globalAlpha = lerp(0.2,1,p);
+  ctx.fillStyle = '#f5c030';
+  ctx.beginPath(); ctx.arc(AW-80,36,sr,0,Math.PI*2); ctx.fill();
+  if(p > 0.7){
+    ctx.strokeStyle = 'rgba(245,190,40,0.5)'; ctx.lineWidth = 2;
+    for(let i=0;i<8;i++){
+      const a = i/8*Math.PI*2 + t*0.6;
+      ctx.beginPath();
+      ctx.moveTo(AW-80+Math.cos(a)*(sr+4), 36+Math.sin(a)*(sr+4));
+      ctx.lineTo(AW-80+Math.cos(a)*(sr+11), 36+Math.sin(a)*(sr+11));
+      ctx.stroke();
     }
-    const newData = { arrive: [], leave: [] };
-    const newChecked = { arrive: {}, leave: {} };
-    const secMap = { arrive: {}, leave: {} };
-    rows.forEach(row => {
-      const tab = row.tab;
-      if (!newData[tab]) return;
-      if (!secMap[tab][row.section]) {
-        secMap[tab][row.section] = { title: row.section, items: [] };
+  }
+  ctx.restore();
+
+  // Ground
+  const crackP = norm(p,0,0.35);
+  const greenP = norm(p,0.1,0.65);
+  ctx.fillStyle = hexLerp('#7a9a50','#5aba3a',greenP);
+  ctx.fillRect(0,groundY,AW,AH-groundY);
+  if(crackP < 1){
+    ctx.save(); ctx.globalAlpha = 1-crackP;
+    ctx.fillStyle = '#8a6a40'; ctx.fillRect(0,groundY,AW,AH-groundY);
+    ctx.strokeStyle = '#4a3018'; ctx.lineWidth = 1.5;
+    [[60,groundY+6,140,groundY+30],[140,groundY+30,100,groundY+55],
+     [210,groundY+4,270,groundY+32],[270,groundY+32,235,groundY+55],
+     [380,groundY+6,430,groundY+34],[430,groundY+34,400,groundY+55],
+     [490,groundY+8,550,groundY+36],[320,groundY+10,365,groundY+45]
+    ].forEach(([x1,y1,x2,y2])=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();});
+    ctx.restore();
+  }
+
+  // Flowers
+  const flP = norm(p,0.55,1);
+  if(flP > 0){
+    const fls=[
+      {x:22,c:'#e85070'},{x:42,c:'#f0a030'},{x:60,c:'#e060c0'},{x:78,c:'#60c0f0'},
+      {x:96,c:'#e85070'},{x:114,c:'#f0a030'},{x:132,c:'#e060c0'},{x:150,c:'#e85070'},
+      {x:168,c:'#60c0f0'},{x:32,c:'#f0c0e0',dy:8},{x:52,c:'#e85070',dy:6},
+      {x:70,c:'#f0a030',dy:10},{x:90,c:'#e060c0',dy:5},{x:108,c:'#60c0f0',dy:8},
+      {x:126,c:'#e85070',dy:7},{x:148,c:'#f0c0e0',dy:9},{x:164,c:'#f0a030',dy:5},
+      {x:410,c:'#e85070'},{x:428,c:'#f0a030'},{x:446,c:'#e060c0'},{x:464,c:'#60c0f0'},
+      {x:482,c:'#e85070'},{x:500,c:'#f0c0e0'},{x:518,c:'#f0a030'},{x:536,c:'#e060c0'},
+      {x:554,c:'#e85070'},{x:572,c:'#60c0f0'},{x:590,c:'#f0a030'},{x:608,c:'#e060c0'},
+      {x:626,c:'#e85070'},{x:644,c:'#f0c0e0'},{x:662,c:'#f0a030'},
+      {x:420,c:'#f0c0e0',dy:8},{x:438,c:'#e85070',dy:6},{x:456,c:'#f0a030',dy:10},
+      {x:474,c:'#e060c0',dy:5},{x:492,c:'#60c0f0',dy:8},{x:510,c:'#e85070',dy:7},
+      {x:528,c:'#f0c0e0',dy:9},{x:546,c:'#f0a030',dy:5},{x:564,c:'#e060c0',dy:8},
+      {x:582,c:'#e85070',dy:10},{x:600,c:'#60c0f0',dy:5},{x:618,c:'#f0a030',dy:8},
+      {x:636,c:'#e060c0',dy:6},{x:654,c:'#e85070',dy:10},{x:670,c:'#60c0f0',dy:5},
+    ];
+    fls.forEach(({x,c,dy=0})=>{
+      if(x > AW-4) return;
+      const fy = groundY+(dy||0);
+      ctx.save(); ctx.globalAlpha = Math.min(1,flP*1.5);
+      ctx.strokeStyle='#3a8a3a'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(x,fy+14); ctx.lineTo(x,fy+2); ctx.stroke();
+      ctx.fillStyle=c;
+      for(let i=0;i<5;i++){
+        const a=i/5*Math.PI*2+t*0.25;
+        ctx.beginPath(); ctx.ellipse(x+Math.cos(a)*4,fy+2+Math.sin(a)*4,3,2,a,0,Math.PI*2); ctx.fill();
+      }
+      ctx.fillStyle='#ffe060';
+      ctx.beginPath(); ctx.arc(x,fy+2,2.5,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  // House wall
+  ctx.fillStyle = hexLerp('#a09080','#f5ede0',p);
+  ctx.beginPath(); ctx.roundRect(195,AH*0.35,200,AH*0.48,4); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.07)'; ctx.lineWidth=0.5; ctx.stroke();
+  // Roof
+  ctx.fillStyle = hexLerp('#705848','#c07048',p);
+  ctx.beginPath(); ctx.moveTo(178,AH*0.37); ctx.lineTo(295,AH*0.08); ctx.lineTo(412,AH*0.37); ctx.closePath(); ctx.fill();
+  // Chimney
+  ctx.fillStyle = hexLerp('#705848','#b06040',p);
+  ctx.fillRect(345,AH*0.1,18,AH*0.16);
+
+  // 4 windows
+  [[210,AH*0.41,36,26],[348,AH*0.41,36,26],[210,AH*0.595,36,24],[348,AH*0.595,36,24]].forEach(([wx,wy,ww,wh])=>{
+    const glow = p>0.45 ? `rgba(255,${Math.round(lerp(180,235,norm(p,0.45,1)))},80,${norm(p,0.45,1)*0.92})` : 'rgba(140,168,188,0.45)';
+    ctx.fillStyle=glow; ctx.beginPath(); ctx.roundRect(wx,wy,ww,wh,2); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.1)'; ctx.lineWidth=0.5; ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(wx+ww/2,wy); ctx.lineTo(wx+ww/2,wy+wh); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(wx,wy+wh/2); ctx.lineTo(wx+ww,wy+wh/2); ctx.stroke();
+  });
+
+  // Door
+  ctx.fillStyle = hexLerp('#6a4830','#a87048',p);
+  ctx.beginPath(); ctx.roundRect(270,AH*0.59,50,AH*0.21,3); ctx.fill();
+  ctx.fillStyle = hexLerp('#b07030','#f0d060',p);
+  ctx.beginPath(); ctx.arc(315,AH*0.695,3,0,Math.PI*2); ctx.fill();
+
+  // Broom
+  if(sweeping){
+    ctx.save(); ctx.translate(broomX, groundY-2);
+    ctx.strokeStyle='#7a4e20'; ctx.lineWidth=3; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(0,-28); ctx.lineTo(12,0); ctx.stroke();
+    ctx.fillStyle='#c8902a';
+    ctx.beginPath(); ctx.moveTo(-14,0); ctx.lineTo(26,0); ctx.lineTo(32,13); ctx.lineTo(-20,13); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha=0.28; ctx.fillStyle='#d4b060';
+    ctx.beginPath(); ctx.ellipse(5,18,26,7,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // Sparkles
+  const spkP = norm(p,0.82,1);
+  if(spkP > 0.01){
+    [[198,AH*0.35],[412,AH*0.35],[295,AH*0.06],[200,AH*0.585],[410,AH*0.58],[295,AH*0.38]].forEach(([sx,sy],i)=>{
+      const pulse = Math.sin(t*3.5+i*1.3)*0.35+0.65;
+      ctx.save(); ctx.globalAlpha=spkP*pulse;
+      ctx.fillStyle='#ffe040'; ctx.font=`${Math.round(lerp(10,16,spkP))}px sans-serif`; ctx.textAlign='center';
+      ctx.fillText('✦',sx,sy);
+      ctx.restore();
+    });
+    ctx.save(); ctx.globalAlpha=spkP*0.1;
+    const hg=ctx.createRadialGradient(295,AH*0.45,10,295,AH*0.45,110);
+    hg.addColorStop(0,'#ffe060'); hg.addColorStop(1,'transparent');
+    ctx.fillStyle=hg; ctx.fillRect(0,0,AW,AH);
+    ctx.restore();
+  }
+}
+
+function drawLeave(p, t, offX) {
+  const ctx = lCtx;
+  ctx.clearRect(0,0,AW,AH);
+  const groundY = AH * 0.62;
+  const nightP = norm(p,0,0.6);
+
+  const sg = ctx.createLinearGradient(0,0,0,groundY);
+  sg.addColorStop(0, hexLerp('#7ab8e0','#0c1828',nightP));
+  sg.addColorStop(1, hexLerp('#c0e0f8','#182840',nightP));
+  ctx.fillStyle=sg; ctx.fillRect(0,0,AW,groundY);
+  ctx.fillStyle=hexLerp('#5aaa5a','#1a3018',nightP);
+  ctx.fillRect(0,groundY,AW,AH-groundY);
+
+  // Moon
+  const moonOp = norm(p,0.15,0.65);
+  if(moonOp>0){
+    ctx.save(); ctx.globalAlpha=moonOp;
+    ctx.fillStyle='#f0e8b0'; ctx.beginPath(); ctx.arc(AW-80,30,14,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=hexLerp('#7ab8e0','#0c1828',nightP);
+    ctx.beginPath(); ctx.arc(AW-70,25,11,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // Stars
+  const starOp = norm(p,0.2,0.75);
+  if(starOp>0){
+    [[40,14],[85,26],[125,10],[168,22],[210,8],[268,24],[318,12],[368,28],[428,16],[38,38],[95,44],[145,34],[225,40],[285,30],[345,46],[385,38]].forEach(([sx,sy])=>{
+      ctx.save(); ctx.globalAlpha=starOp*(0.5+Math.sin(t*1.8+sx)*0.5);
+      ctx.fillStyle='white'; ctx.beginPath(); ctx.arc(sx,sy,1.1,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  // House
+  ctx.fillStyle=hexLerp('#f0e0c8','#7a6858',nightP);
+  ctx.beginPath(); ctx.roundRect(195,AH*0.32,200,AH*0.50,4); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.07)'; ctx.lineWidth=0.5; ctx.stroke();
+  ctx.fillStyle=hexLerp('#c07048','#4a3828',nightP);
+  ctx.beginPath(); ctx.moveTo(178,AH*0.34); ctx.lineTo(295,AH*0.05); ctx.lineTo(412,AH*0.34); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=hexLerp('#b06040','#3c2c1c',nightP);
+  ctx.fillRect(345,AH*0.07,18,AH*0.15);
+
+  // 6 windows closing progressively
+  [{x:210,y:AH*0.37,w:34,h:24,at:0.12},{x:263,y:AH*0.37,w:34,h:24,at:0.28},
+   {x:316,y:AH*0.37,w:34,h:24,at:0.42},{x:210,y:AH*0.565,w:34,h:22,at:0.56},
+   {x:263,y:AH*0.565,w:34,h:22,at:0.68},{x:316,y:AH*0.565,w:34,h:22,at:0.80}
+  ].forEach(({x,y,w,h,at})=>{
+    const sp=norm(p,at,at+0.14);
+    ctx.fillStyle=sp>0?'rgba(38,50,72,0.95)':'rgba(255,215,75,0.9)';
+    ctx.beginPath(); ctx.roundRect(x,y,w,h,2); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.1)'; ctx.lineWidth=0.5; ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x+w/2,y); ctx.lineTo(x+w/2,y+h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x,y+h/2); ctx.lineTo(x+w,y+h/2); ctx.stroke();
+    if(sp>0){
+      const sw=Math.min(sp*(w/2+1),w/2);
+      ctx.fillStyle='#4a3020';
+      ctx.fillRect(x,y,sw,h); ctx.fillRect(x+w-sw,y,sw,h);
+    }
+  });
+
+  // Door
+  const doorP=norm(p,0.85,1);
+  ctx.fillStyle=hexLerp('#9a6040','#3a2818',Math.min(nightP*1.5,1));
+  ctx.beginPath(); ctx.roundRect(270,AH*0.585,50,AH*0.225,3); ctx.fill();
+  if(doorP>0){
+    ctx.fillStyle=`rgba(15,10,5,${doorP*0.85})`;
+    ctx.beginPath(); ctx.roundRect(270,AH*0.585,50*doorP,AH*0.225,3); ctx.fill();
+  }
+
+  // Road
+  ctx.fillStyle=hexLerp('#686868','#282828',nightP);
+  ctx.fillRect(0,AH*0.78,AW,AH-AH*0.78);
+  ctx.save(); ctx.strokeStyle=`rgba(255,255,255,${lerp(0.3,0.1,nightP)})`; ctx.setLineDash([20,15]); ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0,AH*0.87); ctx.lineTo(AW,AH*0.87); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+
+  // Truck — parked right of house, drives off right at p=1
+  drawTruck(ctx, p, t, 420 + offX, AH);
+}
+
+function drawTruck(ctx, p, t, tx, H) {
+  if(tx > AW + 220) return;
+  ctx.save(); ctx.translate(tx, 0);
+  const ty = H*0.645;
+
+  // Trailer bed
+  ctx.fillStyle='#c07828';
+  ctx.beginPath(); ctx.roundRect(0,ty,130,34,2); ctx.fill();
+  ctx.strokeStyle='#8a5010'; ctx.lineWidth=1; ctx.stroke();
+  // rails
+  ctx.strokeStyle='#8a5010'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(2,ty); ctx.lineTo(2,ty-18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(128,ty); ctx.lineTo(128,ty-18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(2,ty-18); ctx.lineTo(128,ty-18); ctx.stroke();
+
+  // 4 boxes
+  [{bx:8,c:'#e07830',at:0.08},{bx:38,c:'#4060b0',at:0.25},{bx:68,c:'#c04040',at:0.45},{bx:98,c:'#508840',at:0.65}].forEach(({bx,c,at})=>{
+    if(p<at) return;
+    ctx.fillStyle=c; ctx.beginPath(); ctx.roundRect(bx,ty-14,26,14,2); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.5; ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,0.22)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(bx+4,ty-11); ctx.lineTo(bx+22,ty-11); ctx.stroke();
+  });
+
+  // Cab (right side = front)
+  ctx.fillStyle='#3a6898';
+  ctx.beginPath(); ctx.roundRect(130,ty-10,52,44,4); ctx.fill();
+  ctx.fillStyle='rgba(160,210,245,0.75)';
+  ctx.beginPath(); ctx.roundRect(136,ty-4,40,22,2); ctx.fill();
+
+  // Headlights (right side = front)
+  const hlOp = norm(p,0.55,0.85);
+  ctx.fillStyle=`rgba(255,240,140,${hlOp*0.9})`;
+  ctx.beginPath(); ctx.roundRect(180,ty+8,5,8,1); ctx.fill();
+  if(hlOp>0 && p>=1){
+    const lg=ctx.createLinearGradient(185,ty+10,280,ty+12);
+    lg.addColorStop(0,`rgba(255,240,100,${hlOp*0.4})`);
+    lg.addColorStop(1,'transparent');
+    ctx.fillStyle=lg; ctx.fillRect(185,ty+4,90,14);
+  }
+
+  // Exhaust from left (rear) when driving
+  if(p>=1){
+    [0,1,2].forEach(i=>{
+      ctx.save(); ctx.globalAlpha=0.25-i*0.07;
+      ctx.fillStyle='#aaa';
+      ctx.beginPath(); ctx.arc(-10-i*12,ty-6-i*5,4+i*2.5,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  // Wheels
+  [[20,ty+33],[60,ty+33],[100,ty+33],[146,ty+33],[164,ty+33]].forEach(([wx,wy])=>{
+    ctx.fillStyle='#1a1a1a'; ctx.beginPath(); ctx.arc(wx,wy,9,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#555'; ctx.beginPath(); ctx.arc(wx,wy,4.5,0,Math.PI*2); ctx.fill();
+  });
+
+  ctx.restore();
+}
+
+// ---- Animation loop ----
+function animLoop(ts) {
+  animTime = ts / 1000;
+
+  // Arrive pct from actual progress
+  let total=0, done=0;
+  data.arrive.forEach((sec,si)=>sec.items.forEach((_,ii)=>{total++;if(checked.arrive['arrive-'+si+'-'+ii])done++;}));
+  const aP = total>0 ? done/total : 0;
+
+  let ltotal=0, ldone=0;
+  data.leave.forEach((sec,si)=>sec.items.forEach((_,ii)=>{ltotal++;if(checked.leave['leave-'+si+'-'+ii])ldone++;}));
+  const lP = ltotal>0 ? ldone/ltotal : 0;
+
+  // Broom trigger on new check
+  if(aP > prevArrivePct + 0.001 && !sweeping){ sweeping=true; broomX=-80; }
+  if(sweeping){ broomX+=10; if(broomX>AW+80) sweeping=false; }
+  prevArrivePct = aP;
+
+  // Truck drive-off at 100%
+  if(lP >= 1){ truckOffX += 7; } else { truckOffX = 0; }
+  prevLeavePct = lP;
+
+  drawArrive(aP, animTime);
+  drawLeave(lP, animTime, truckOffX);
+
+  requestAnimationFrame(animLoop);
+}
+requestAnimationFrame(animLoop);
+
+// ---- Sync ----
+function setSync(tab,msg,cls){
+  const el=document.getElementById(tab+'-sync');
+  el.textContent=msg; el.className='sync-status'+(cls?' '+cls:'');
+}
+
+async function loadFromSheet(){
+  try{
+    const res=await fetch(API_URL);
+    const rows=await res.json();
+    if(!rows||rows.length===0){await saveToSheet();return;}
+    const newData={arrive:[],leave:[]};
+    const newChecked={arrive:{},leave:{}};
+    const secMap={arrive:{},leave:{}};
+    rows.forEach(row=>{
+      const tab=row.tab;
+      if(!newData[tab])return;
+      if(!secMap[tab][row.section]){
+        secMap[tab][row.section]={title:row.section,items:[]};
         newData[tab].push(secMap[tab][row.section]);
       }
-      const si = newData[tab].indexOf(secMap[tab][row.section]);
-      const ii = secMap[tab][row.section].items.length;
-      secMap[tab][row.section].items.push({ text: row.item, note: row.note || '' });
-      if (row.checked === 'TRUE' || row.checked === true) {
-        newChecked[tab][tab + '-' + si + '-' + ii] = true;
+      const si=newData[tab].indexOf(secMap[tab][row.section]);
+      const ii=secMap[tab][row.section].items.length;
+      secMap[tab][row.section].items.push({text:row.item,note:row.note||''});
+      if(row.checked==='TRUE'||row.checked===true){
+        newChecked[tab][tab+'-'+si+'-'+ii]=true;
       }
     });
-    data = newData;
-    checked = newChecked;
-    render('arrive');
-    render('leave');
-  } catch(e) {
-    setSync(currentTab, '読み込みエラー', 'error');
-  }
+    data=newData; checked=newChecked;
+    render('arrive'); render('leave');
+  }catch(e){setSync(currentTab,'読み込みエラー','error');}
 }
 
-async function saveToSheet() {
-  const rows = [];
-  ['arrive', 'leave'].forEach(tab => {
-    data[tab].forEach((sec, si) => {
-      sec.items.forEach((item, ii) => {
-        const key = tab + '-' + si + '-' + ii;
-        rows.push([tab, sec.title, item.text, item.note || '', checked[tab][key] ? 'TRUE' : '']);
+async function saveToSheet(){
+  const rows=[];
+  ['arrive','leave'].forEach(tab=>{
+    data[tab].forEach((sec,si)=>{
+      sec.items.forEach((item,ii)=>{
+        const key=tab+'-'+si+'-'+ii;
+        rows.push([tab,sec.title,item.text,item.note||'',checked[tab][key]?'TRUE':'']);
       });
     });
   });
-  try {
-    await fetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'saveAll', rows }),
-      headers: { 'Content-Type': 'text/plain' }
-    });
-  } catch(e) {}
+  try{
+    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveAll',rows}),headers:{'Content-Type':'text/plain'}});
+  }catch(e){}
 }
 
-async function setCheckedOnSheet(tab, key, val) {
-  const parts = key.split('-');
-  const si = parseInt(parts[1]);
-  const ii = parseInt(parts[2]);
-  const sec = data[tab][si];
-  const item = sec.items[ii];
-  setSync(tab, '同期中…', 'syncing');
-  try {
-    await fetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'setChecked', tab, section: sec.title, item: item.text, checked: val }),
-      headers: { 'Content-Type': 'text/plain' }
-    });
-    setSync(tab, '同期済み', '');
-    setTimeout(() => setSync(tab, '', ''), 2000);
-  } catch(e) {
-    setSync(tab, '同期エラー', 'error');
-  }
+async function setCheckedOnSheet(tab,key,val){
+  const parts=key.split('-');
+  const si=parseInt(parts[1]),ii=parseInt(parts[2]);
+  const sec=data[tab][si],item=sec.items[ii];
+  setSync(tab,'同期中…','syncing');
+  try{
+    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'setChecked',tab,section:sec.title,item:item.text,checked:val}),headers:{'Content-Type':'text/plain'}});
+    setSync(tab,'同期済み','');
+    setTimeout(()=>setSync(tab,'',''),2000);
+  }catch(e){setSync(tab,'同期エラー','error');}
 }
 
-function startPolling() {
-  if (pollTimer) return;
-  pollTimer = setInterval(() => { if (!isEditing) loadFromSheet(); }, 30000);
+function startPolling(){
+  if(pollTimer)return;
+  pollTimer=setInterval(()=>{if(!isEditing)loadFromSheet();},30000);
 }
 
-function switchTab(tab) {
-  currentTab = tab;
-  document.querySelectorAll('.tab').forEach((t, i) => {
-    t.classList.toggle('active', (i === 0 && tab === 'arrive') || (i === 1 && tab === 'leave'));
+function switchTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    t.classList.toggle('active',(i===0&&tab==='arrive')||(i===1&&tab==='leave'));
   });
-  document.getElementById('arrive-panel').style.display = tab === 'arrive' ? 'block' : 'none';
-  document.getElementById('leave-panel').style.display = tab === 'leave' ? 'block' : 'none';
+  document.getElementById('arrive-panel').style.display=tab==='arrive'?'block':'none';
+  document.getElementById('leave-panel').style.display=tab==='leave'?'block':'none';
 }
 
-function toggleEdit() {
-  isEditing = !isEditing;
-  const btn = document.getElementById('editToggle');
-  btn.textContent = isEditing ? '完了' : '編集';
-  btn.classList.toggle('active', isEditing);
-  if (!isEditing) {
-    saveEdits();
-    saveToSheet();
-  }
-  render('arrive');
-  render('leave');
+function toggleEdit(){
+  isEditing=!isEditing;
+  const btn=document.getElementById('editToggle');
+  btn.textContent=isEditing?'完了':'編集';
+  btn.classList.toggle('active',isEditing);
+  if(!isEditing){saveEdits();saveToSheet();}
+  render('arrive'); render('leave');
 }
 
-function saveEdits() {
-  ['arrive', 'leave'].forEach(tab => {
-    const sections = document.querySelectorAll('#' + tab + '-sections .section');
-    data[tab] = [];
-    sections.forEach(sec => {
-      const titleInput = sec.querySelector('.section-title-input');
-      const title = titleInput ? titleInput.value : sec.querySelector('.section-title').textContent;
-      const items = [];
-      sec.querySelectorAll('.item').forEach(itemEl => {
-        const inputs = itemEl.querySelectorAll('.item-edit-controls input');
-        if (inputs.length >= 1) items.push({ text: inputs[0].value, note: inputs[1] ? inputs[1].value : '' });
+function saveEdits(){
+  ['arrive','leave'].forEach(tab=>{
+    const sections=document.querySelectorAll('#'+tab+'-sections .section');
+    data[tab]=[];
+    sections.forEach(sec=>{
+      const titleInput=sec.querySelector('.section-title-input');
+      const title=titleInput?titleInput.value:sec.querySelector('.section-title').textContent;
+      const items=[];
+      sec.querySelectorAll('.item').forEach(itemEl=>{
+        const inputs=itemEl.querySelectorAll('.item-edit-controls input');
+        if(inputs.length>=1)items.push({text:inputs[0].value,note:inputs[1]?inputs[1].value:''});
       });
-      data[tab].push({ title, items });
+      data[tab].push({title,items});
     });
-    checked[tab] = {};
+    checked[tab]={};
   });
 }
 
-function render(tab) {
-  const container = document.getElementById(tab + '-sections');
-  container.innerHTML = '';
-  data[tab].forEach((sec, si) => {
-    const secEl = document.createElement('div');
-    secEl.className = 'section' + (isEditing ? ' editing' : '');
-    secEl.dataset.si = si;
-    const hdr = document.createElement('div');
-    hdr.className = 'section-header';
-    if (isEditing) {
-      const inp = document.createElement('input');
-      inp.className = 'section-title-input';
-      inp.value = sec.title;
+function render(tab){
+  const container=document.getElementById(tab+'-sections');
+  container.innerHTML='';
+  data[tab].forEach((sec,si)=>{
+    const secEl=document.createElement('div');
+    secEl.className='section'+(isEditing?' editing':'');
+    secEl.dataset.si=si;
+    const hdr=document.createElement('div');
+    hdr.className='section-header';
+    if(isEditing){
+      const inp=document.createElement('input');
+      inp.className='section-title-input'; inp.value=sec.title;
       hdr.appendChild(inp);
-      const btns = document.createElement('div');
-      btns.className = 'edit-section-btns';
-      const delBtn = document.createElement('button');
-      delBtn.className = 'small-btn danger';
-      delBtn.textContent = '削除';
-      delBtn.onclick = () => { data[tab].splice(si, 1); render(tab); updateProgress(tab); };
-      btns.appendChild(delBtn);
-      hdr.appendChild(btns);
-    } else {
-      const titleEl = document.createElement('div');
-      titleEl.className = 'section-title';
-      titleEl.textContent = sec.title;
+      const btns=document.createElement('div');
+      btns.className='edit-section-btns';
+      const delBtn=document.createElement('button');
+      delBtn.className='small-btn danger'; delBtn.textContent='削除';
+      delBtn.onclick=()=>{data[tab].splice(si,1);render(tab);updateProgress(tab);};
+      btns.appendChild(delBtn); hdr.appendChild(btns);
+    }else{
+      const titleEl=document.createElement('div');
+      titleEl.className='section-title'; titleEl.textContent=sec.title;
       hdr.appendChild(titleEl);
     }
     secEl.appendChild(hdr);
-    sec.items.forEach((item, ii) => {
-      const key = tab + '-' + si + '-' + ii;
-      const itemEl = document.createElement('div');
-      itemEl.className = 'item' + (checked[tab][key] && !isEditing ? ' checked' : '') + (isEditing ? ' editing-item' : '');
-      itemEl.dataset.key = key;
-      itemEl.dataset.si = si;
-      itemEl.dataset.ii = ii;
-      if (!isEditing) {
-        itemEl.onclick = () => toggleCheck(tab, key);
-        const cb = document.createElement('div');
-        cb.className = 'checkbox';
-        const cm = document.createElement('span');
-        cm.className = 'checkmark';
-        cm.textContent = '✓';
-        cb.appendChild(cm);
-        itemEl.appendChild(cb);
-        const body = document.createElement('div');
-        body.className = 'item-body';
-        const txt = document.createElement('div');
-        txt.className = 'item-text';
-        txt.textContent = item.text;
+    sec.items.forEach((item,ii)=>{
+      const key=tab+'-'+si+'-'+ii;
+      const itemEl=document.createElement('div');
+      itemEl.className='item'+(checked[tab][key]&&!isEditing?' checked':'')+(isEditing?' editing-item':'');
+      itemEl.dataset.key=key; itemEl.dataset.si=si; itemEl.dataset.ii=ii;
+      if(!isEditing){
+        itemEl.onclick=()=>toggleCheck(tab,key);
+        const cb=document.createElement('div'); cb.className='checkbox';
+        const cm=document.createElement('span'); cm.className='checkmark'; cm.textContent='✓';
+        cb.appendChild(cm); itemEl.appendChild(cb);
+        const body=document.createElement('div'); body.className='item-body';
+        const txt=document.createElement('div'); txt.className='item-text'; txt.textContent=item.text;
         body.appendChild(txt);
-        if (item.note) {
-          const note = document.createElement('div');
-          note.className = 'item-note';
-          note.textContent = item.note;
-          body.appendChild(note);
-        }
+        if(item.note){const note=document.createElement('div');note.className='item-note';note.textContent=item.note;body.appendChild(note);}
         itemEl.appendChild(body);
-      } else {
-        itemEl.draggable = true;
-        itemEl.addEventListener('dragstart', onDragStart);
-        itemEl.addEventListener('dragover', onDragOver);
-        itemEl.addEventListener('drop', onDrop);
-        itemEl.addEventListener('dragend', onDragEnd);
-        const handle = document.createElement('div');
-        handle.className = 'drag-handle';
-        handle.textContent = '⠿';
+      }else{
+        itemEl.draggable=true;
+        itemEl.addEventListener('dragstart',onDragStart);
+        itemEl.addEventListener('dragover',onDragOver);
+        itemEl.addEventListener('drop',onDrop);
+        itemEl.addEventListener('dragend',onDragEnd);
+        const handle=document.createElement('div'); handle.className='drag-handle'; handle.textContent='⠿';
         itemEl.appendChild(handle);
-        const editCtrl = document.createElement('div');
-        editCtrl.className = 'item-edit-controls';
-        const inp1 = document.createElement('input');
-        inp1.placeholder = '項目名';
-        inp1.value = item.text;
-        const inp2 = document.createElement('input');
-        inp2.placeholder = 'メモ（任意）';
-        inp2.value = item.note || '';
-        editCtrl.appendChild(inp1);
-        editCtrl.appendChild(inp2);
-        itemEl.appendChild(editCtrl);
-        const actions = document.createElement('div');
-        actions.className = 'item-actions';
-        const delBtn = document.createElement('button');
-        delBtn.className = 'item-del';
-        delBtn.textContent = '削除';
-        delBtn.onclick = () => { data[tab][si].items.splice(ii, 1); render(tab); };
-        actions.appendChild(delBtn);
-        itemEl.appendChild(actions);
+        const editCtrl=document.createElement('div'); editCtrl.className='item-edit-controls';
+        const inp1=document.createElement('input'); inp1.placeholder='項目名'; inp1.value=item.text;
+        const inp2=document.createElement('input'); inp2.placeholder='メモ（任意）'; inp2.value=item.note||'';
+        editCtrl.appendChild(inp1); editCtrl.appendChild(inp2); itemEl.appendChild(editCtrl);
+        const actions=document.createElement('div'); actions.className='item-actions';
+        const delBtn=document.createElement('button'); delBtn.className='item-del'; delBtn.textContent='削除';
+        delBtn.onclick=()=>{data[tab][si].items.splice(ii,1);render(tab);};
+        actions.appendChild(delBtn); itemEl.appendChild(actions);
       }
       secEl.appendChild(itemEl);
     });
-    const addBtn = document.createElement('button');
-    addBtn.className = 'add-item-btn';
-    addBtn.textContent = '+ 項目を追加';
-    addBtn.onclick = () => { data[tab][si].items.push({ text: '新しい項目', note: '' }); render(tab); };
+    const addBtn=document.createElement('button'); addBtn.className='add-item-btn'; addBtn.textContent='+ 項目を追加';
+    addBtn.onclick=()=>{data[tab][si].items.push({text:'新しい項目',note:''});render(tab);};
     secEl.appendChild(addBtn);
     container.appendChild(secEl);
   });
   updateProgress(tab);
 }
 
-function toggleCheck(tab, key) {
-  if (isEditing) return;
-  checked[tab][key] = !checked[tab][key];
-  setCheckedOnSheet(tab, key, checked[tab][key]);
-  updateProgress(tab);
-  render(tab);
+function toggleCheck(tab,key){
+  if(isEditing)return;
+  checked[tab][key]=!checked[tab][key];
+  setCheckedOnSheet(tab,key,checked[tab][key]);
+  updateProgress(tab); render(tab);
 }
 
-function updateProgress(tab) {
-  let total = 0, done = 0;
-  data[tab].forEach((sec, si) => {
-    sec.items.forEach((_, ii) => {
-      total++;
-      if (checked[tab][tab + '-' + si + '-' + ii]) done++;
-    });
-  });
-  const pct = total ? Math.round(done / total * 100) : 0;
-  document.getElementById(tab + '-bar').style.width = pct + '%';
-  document.getElementById(tab + '-label').textContent = done + ' / ' + total + ' 完了';
-  const doneEl = document.getElementById(tab + '-done');
-  if (doneEl) doneEl.style.display = (done === total && total > 0 && !isEditing) ? 'block' : 'none';
+function updateProgress(tab){
+  let total=0,done=0;
+  data[tab].forEach((sec,si)=>sec.items.forEach((_,ii)=>{total++;if(checked[tab][tab+'-'+si+'-'+ii])done++;}));
+  const pct=total?Math.round(done/total*100):0;
+  document.getElementById(tab+'-bar').style.width=pct+'%';
+  document.getElementById(tab+'-label').textContent=done+' / '+total+' 完了';
+  const doneEl=document.getElementById(tab+'-done');
+  if(doneEl)doneEl.style.display=(done===total&&total>0&&!isEditing)?'block':'none';
 }
 
-function addSection(tab) {
+function addSection(tab){
   saveEdits();
-  data[tab].push({ title: '新しいセクション', items: [{ text: '新しい項目', note: '' }] });
+  data[tab].push({title:'新しいセクション',items:[{text:'新しい項目',note:''}]});
   render(tab);
 }
 
-function resetPanel(tab) {
-  if (!confirm('チェックをすべてリセットしますか？')) return;
-  checked[tab] = {};
-  saveToSheet();
-  render(tab);
+function resetPanel(tab){
+  if(!confirm('チェックをすべてリセットしますか？'))return;
+  checked[tab]={};
+  saveToSheet(); render(tab);
 }
 
-function onDragStart(e) { dragSrc = this; e.dataTransfer.effectAllowed = 'move'; }
-function onDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  document.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'));
-  if (this !== dragSrc) this.classList.add('drag-over');
+function onDragStart(e){dragSrc=this;e.dataTransfer.effectAllowed='move';}
+function onDragOver(e){
+  e.preventDefault(); e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.item').forEach(el=>el.classList.remove('drag-over'));
+  if(this!==dragSrc)this.classList.add('drag-over');
 }
-function onDrop(e) {
-  e.preventDefault();
-  if (this === dragSrc) return;
-  const tab = currentTab;
-  const srcSi = parseInt(dragSrc.dataset.si);
-  const srcIi = parseInt(dragSrc.dataset.ii);
-  const dstSi = parseInt(this.dataset.si);
-  const dstIi = parseInt(this.dataset.ii);
-  if (isNaN(srcSi) || isNaN(dstSi)) return;
+function onDrop(e){
+  e.preventDefault(); if(this===dragSrc)return;
+  const tab=currentTab;
+  const srcSi=parseInt(dragSrc.dataset.si),srcIi=parseInt(dragSrc.dataset.ii);
+  const dstSi=parseInt(this.dataset.si),dstIi=parseInt(this.dataset.ii);
+  if(isNaN(srcSi)||isNaN(dstSi))return;
   saveEdits();
-  const [moved] = data[tab][srcSi].items.splice(srcIi, 1);
-  data[tab][dstSi].items.splice(dstIi, 0, moved);
+  const [moved]=data[tab][srcSi].items.splice(srcIi,1);
+  data[tab][dstSi].items.splice(dstIi,0,moved);
   render(tab);
 }
-function onDragEnd() {
-  document.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'));
-  dragSrc = null;
+function onDragEnd(){
+  document.querySelectorAll('.item').forEach(el=>el.classList.remove('drag-over'));
+  dragSrc=null;
 }
 
 loadFromSheet();
