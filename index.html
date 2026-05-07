@@ -15,7 +15,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-se
 .scroll-content { padding: 1.25rem 1rem 4rem; }
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
 .tabs { display: flex; gap: 8px; flex: 1; }
-.tab { flex: 1; padding: 10px 12px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #666; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.tab { flex: 1; padding: 8px 4px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #666; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.15s; text-align:center; }
 .tab.active { background: #f0f0ee; color: #1a1a1a; border-color: #999; }
 .tab:hover:not(.active) { background: #f0f0ee; }
 .edit-toggle { margin-left: 12px; padding: 8px 14px; font-size: 12px; border: 0.5px solid #ccc; border-radius: 8px; background: white; color: #666; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
@@ -42,6 +42,8 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
 .checkbox { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #ccc; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; transition: all 0.15s; }
 .arrive-tab .item.checked .checkbox { background: #1D9E75; border-color: #1D9E75; }
 .leave-tab .item.checked .checkbox { background: #D85A30; border-color: #D85A30; }
+.longterm-tab .item.checked .checkbox { background: #6a5acd; border-color: #6a5acd; }
+.once-tab .item.checked .checkbox { background: #e09020; border-color: #e09020; }
 .checkmark { display: none; color: white; font-size: 11px; font-weight: 600; }
 .item.checked .checkmark { display: block; }
 .item-body { flex: 1; min-width: 0; }
@@ -52,7 +54,7 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
 .item-edit-controls { display: none; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .item-edit-controls input { font-size: 13px; border: 0.5px solid #ccc; border-radius: 4px; padding: 4px 8px; background: white; color: #1a1a1a; outline: none; width: 100%; }
 .item-actions { display: none; flex-direction: column; gap: 4px; align-items: center; flex-shrink: 0; }
-.drag-handle { cursor: grab; color: #bbb; font-size: 14px; padding: 2px 4px; line-height: 1; }
+.drag-handle { cursor: grab; color: #bbb; font-size: 14px; padding: 2px 4px; line-height: 1; user-select: none; -webkit-user-select: none; touch-action: none; }
 .drag-handle:active { cursor: grabbing; }
 .item-del { padding: 3px 6px; font-size: 11px; border: 0.5px solid #ccc; border-radius: 4px; background: transparent; color: #888; cursor: pointer; }
 .item-del:hover { background: #FAECE7; color: #993C1D; border-color: #D85A30; }
@@ -83,8 +85,11 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
   <div class="sticky-top">
     <div class="header">
       <div class="tabs">
-        <button class="tab active" onclick="switchTab('arrive')">到着時にやること</button>
-        <button class="tab" onclick="switchTab('leave')">帰る時にやること</button>
+        <button class="tab active" onclick="switchTab('arrive')">到着時</button>
+        <button class="tab" onclick="switchTab('leave')">帰る時</button>
+        <button class="tab" onclick="switchTab('longterm')">長期不在</button>
+        <button class="tab" onclick="switchTab('once')">1回きり</button>
+        <button class="tab" onclick="switchTab('schedule')">スケジュール</button>
       </div>
       <button class="edit-toggle" id="editToggle" onclick="toggleEdit()">編集</button>
     </div>
@@ -101,6 +106,17 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
       </div>
       <p class="progress-label" id="leave-label"></p>
       <div class="progress-bar-wrap leave"><div class="progress-bar leave-color" id="leave-bar" style="width:0%"></div></div>
+    </div>
+    <div id="longterm-top" style="display:none">
+      <p class="progress-label" id="longterm-label"></p>
+      <div class="progress-bar-wrap" style="background:#e8e8e6"><div class="progress-bar" id="longterm-bar" style="width:0%;background:#6a5acd"></div></div>
+    </div>
+    <div id="once-top" style="display:none">
+      <p class="progress-label" id="once-label"></p>
+      <div class="progress-bar-wrap" style="background:#e8e8e6"><div class="progress-bar" id="once-bar" style="width:0%;background:#e09020"></div></div>
+    </div>
+    <div id="schedule-top" style="display:none">
+      <p class="progress-label" style="color:#888;font-size:12px">利用スケジュール</p>
     </div>
   </div>
 
@@ -124,6 +140,33 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
         <span class="sync-status" id="leave-sync"></span>
       </div>
     </div>
+
+    <!-- 長期不在パネル -->
+    <div id="longterm-panel" style="display:none">
+      <div id="longterm-sections"></div>
+      <button class="add-section-btn" onclick="addSection('longterm')">+ セクションを追加</button>
+      <div class="all-done" id="longterm-done">長期不在の準備完了です ☆</div>
+      <div class="bottom-bar">
+        <button class="reset-btn" onclick="resetPanel('longterm')">チェックをリセット</button>
+        <span class="sync-status" id="longterm-sync"></span>
+      </div>
+    </div>
+
+    <!-- 1回きりタスクパネル -->
+    <div id="once-panel" style="display:none">
+      <div id="once-sections"></div>
+      <button class="add-section-btn" onclick="addSection('once')">+ セクションを追加</button>
+      <div class="all-done" id="once-done">すべての初期整備が完了しました ☆</div>
+      <div class="bottom-bar">
+        <button class="reset-btn" onclick="resetPanel('once')">チェックをリセット</button>
+        <span class="sync-status" id="once-sync"></span>
+      </div>
+    </div>
+
+    <!-- スケジュールパネル -->
+    <div id="schedule-panel" style="display:none">
+      <div id="schedule-content"></div>
+    </div>
   </div>
 </div>
 
@@ -131,6 +174,46 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
 const API_URL = 'https://script.google.com/macros/s/AKfycbyjGEvoRmbFW6-0HTO1yckbvbl9uD1uF0Y5B7wozzGBp94ZH2EYnirRc0Je3NZEVq8E/exec';
 
 const defaultData = {
+  longterm: [
+    { title: '水抜き', items: [
+      { text: 'キッチンの水抜き', note: '' },
+      { text: '洗面台の水抜き', note: '' },
+      { text: '風呂釜の水抜き', note: '' },
+      { text: '風呂洗い場の水抜き', note: '' },
+      { text: '洗濯機の水抜き', note: '' },
+      { text: '玄関先の水抜き', note: '' },
+    ]},
+    { title: '電気・設備', items: [
+      { text: 'ブレーカーを落とす', note: '' },
+      { text: '冷蔵庫の電源を切る', note: '' },
+    ]},
+  ],
+  once: [
+    { title: '安全対策', items: [
+      { text: '突起物の撤去', note: '' },
+      { text: '子供の転落防止対策', note: '' },
+      { text: '床下こたつの安全対策', note: '' },
+    ]},
+    { title: '清掃・廃棄', items: [
+      { text: '粗大ゴミをまとめる', note: '' },
+      { text: '大掃除：奥の寝室', note: '' },
+      { text: '大掃除：キッチン', note: '' },
+      { text: '大掃除：リビング', note: '' },
+      { text: '大掃除：畳の部屋', note: '' },
+      { text: '大掃除：洗面台', note: '' },
+      { text: '大掃除：玄関', note: '' },
+      { text: '大掃除：ベランダ', note: '' },
+      { text: '大掃除：庭', note: '' },
+    ]},
+    { title: '防虫対策', items: [
+      { text: 'スプレータイプの実施', note: '' },
+      { text: '置き型タイプの設置', note: '' },
+    ]},
+    { title: '環境整備', items: [
+      { text: 'チェックリスト関連整備', note: '' },
+      { text: '別荘ノート作成', note: '' },
+    ]},
+  ],
   arrive: [
     { title: '電気・ガス・水道', items: [
       { text: 'ブレーカーを上げる', note: '' },
@@ -192,7 +275,8 @@ const defaultData = {
 };
 
 let data = JSON.parse(JSON.stringify(defaultData));
-let checked = { arrive: {}, leave: {} };
+let checked = { arrive: {}, leave: {}, longterm: {}, once: {} };
+let scheduleData = [];
 let isEditing = false;
 let currentTab = 'arrive';
 let dragSrc = null;
@@ -416,15 +500,6 @@ function drawLeave(p, t, offX) {
     }
   });
 
-  // Door
-  const doorP=norm(p,0.85,1);
-  ctx.fillStyle=hexLerp('#9a6040','#3a2818',Math.min(nightP*1.5,1));
-  ctx.beginPath(); ctx.roundRect(270,AH*0.585,50,AH*0.225,3); ctx.fill();
-  if(doorP>0){
-    ctx.fillStyle=`rgba(15,10,5,${doorP*0.85})`;
-    ctx.beginPath(); ctx.roundRect(270,AH*0.585,50*doorP,AH*0.225,3); ctx.fill();
-  }
-
   // Road
   ctx.fillStyle=hexLerp('#686868','#282828',nightP);
   ctx.fillRect(0,AH*0.78,AW,AH-AH*0.78);
@@ -487,8 +562,8 @@ function drawTruck(ctx, p, t, tx, H) {
     });
   }
 
-  // Wheels
-  [[20,ty+33],[60,ty+33],[100,ty+33],[146,ty+33],[164,ty+33]].forEach(([wx,wy])=>{
+  // Wheels (4つ：荷台下2つ、運転席下1つ→計4つ)
+  [[20,ty+33],[60,ty+33],[100,ty+33],[155,ty+33]].forEach(([wx,wy])=>{
     ctx.fillStyle='#1a1a1a'; ctx.beginPath(); ctx.arc(wx,wy,9,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#555'; ctx.beginPath(); ctx.arc(wx,wy,4.5,0,Math.PI*2); ctx.fill();
   });
@@ -536,9 +611,9 @@ async function loadFromSheet(){
     const res=await fetch(API_URL);
     const rows=await res.json();
     if(!rows||rows.length===0){await saveToSheet();return;}
-    const newData={arrive:[],leave:[]};
-    const newChecked={arrive:{},leave:{}};
-    const secMap={arrive:{},leave:{}};
+    const newData={arrive:[],leave:[],longterm:[],once:[]};
+    const newChecked={arrive:{},leave:{},longterm:{},once:{}};
+    const secMap={arrive:{},leave:{},longterm:{},once:{}};
     rows.forEach(row=>{
       const tab=row.tab;
       if(!newData[tab])return;
@@ -560,7 +635,7 @@ async function loadFromSheet(){
 
 async function saveToSheet(){
   const rows=[];
-  ['arrive','leave'].forEach(tab=>{
+  ['arrive','leave','longterm','once'].forEach(tab=>{
     data[tab].forEach((sec,si)=>{
       sec.items.forEach((item,ii)=>{
         const key=tab+'-'+si+'-'+ii;
@@ -592,13 +667,17 @@ function startPolling(){
 
 function switchTab(tab){
   currentTab=tab;
+  const tabs=['arrive','leave','longterm','once','schedule'];
   document.querySelectorAll('.tab').forEach((t,i)=>{
-    t.classList.toggle('active',(i===0&&tab==='arrive')||(i===1&&tab==='leave'));
+    t.classList.toggle('active',tabs[i]===tab);
   });
-  document.getElementById('arrive-top').style.display=tab==='arrive'?'block':'none';
-  document.getElementById('leave-top').style.display=tab==='leave'?'block':'none';
-  document.getElementById('arrive-panel').style.display=tab==='arrive'?'block':'none';
-  document.getElementById('leave-panel').style.display=tab==='leave'?'block':'none';
+  tabs.forEach(t=>{
+    const top=document.getElementById(t+'-top');
+    const panel=document.getElementById(t+'-panel');
+    if(top) top.style.display=t===tab?'block':'none';
+    if(panel) panel.style.display=t===tab?'block':'none';
+  });
+  if(tab==='schedule') renderSchedule();
 }
 
 function toggleEdit(){
@@ -611,7 +690,7 @@ function toggleEdit(){
 }
 
 function saveEdits(){
-  ['arrive','leave'].forEach(tab=>{
+  ['arrive','leave','longterm','once'].forEach(tab=>{
     const sections=document.querySelectorAll('#'+tab+'-sections .section');
     data[tab]=[];
     sections.forEach(sec=>{
@@ -630,7 +709,17 @@ function saveEdits(){
 
 function render(tab){
   const container=document.getElementById(tab+'-sections');
+  if(!container) return;
   container.innerHTML='';
+  // パネルのclassを設定（チェックボックス色のため）
+  const panelEl=document.getElementById(tab+'-panel');
+  if(panelEl){
+    panelEl.className='';
+    if(tab==='arrive') panelEl.classList.add('arrive-tab');
+    else if(tab==='leave') panelEl.classList.add('leave-tab');
+    else if(tab==='longterm') panelEl.classList.add('longterm-tab');
+    else if(tab==='once') panelEl.classList.add('once-tab');
+  }
   data[tab].forEach((sec,si)=>{
     const secEl=document.createElement('div');
     secEl.className='section'+(isEditing?' editing':'');
@@ -669,12 +758,9 @@ function render(tab){
         if(item.note){const note=document.createElement('div');note.className='item-note';note.textContent=item.note;body.appendChild(note);}
         itemEl.appendChild(body);
       }else{
-        itemEl.draggable=true;
-        itemEl.addEventListener('dragstart',onDragStart);
-        itemEl.addEventListener('dragover',onDragOver);
-        itemEl.addEventListener('drop',onDrop);
-        itemEl.addEventListener('dragend',onDragEnd);
         const handle=document.createElement('div'); handle.className='drag-handle'; handle.textContent='⠿';
+        handle.addEventListener('touchstart',onTouchStart,{passive:false});
+        handle.addEventListener('mousedown',onMouseDown);
         itemEl.appendChild(handle);
         const editCtrl=document.createElement('div'); editCtrl.className='item-edit-controls';
         const inp1=document.createElement('input'); inp1.placeholder='項目名'; inp1.value=item.text;
@@ -724,26 +810,253 @@ function resetPanel(tab){
   saveToSheet(); render(tab);
 }
 
-function onDragStart(e){dragSrc=this;e.dataTransfer.effectAllowed='move';}
-function onDragOver(e){
-  e.preventDefault(); e.dataTransfer.dropEffect='move';
-  document.querySelectorAll('.item').forEach(el=>el.classList.remove('drag-over'));
-  if(this!==dragSrc)this.classList.add('drag-over');
+// --- Touch/Mouse drag for reordering ---
+let dragItem=null, dragClone=null, dragStartY=0, dragOffsetY=0;
+
+function getItemEl(handle){ return handle.closest('.item'); }
+
+function onTouchStart(e){
+  e.preventDefault();
+  startDrag(getItemEl(this), e.touches[0].clientY);
+  document.addEventListener('touchmove', onTouchMove, {passive:false});
+  document.addEventListener('touchend', onTouchEnd);
 }
-function onDrop(e){
-  e.preventDefault(); if(this===dragSrc)return;
-  const tab=currentTab;
-  const srcSi=parseInt(dragSrc.dataset.si),srcIi=parseInt(dragSrc.dataset.ii);
-  const dstSi=parseInt(this.dataset.si),dstIi=parseInt(this.dataset.ii);
-  if(isNaN(srcSi)||isNaN(dstSi))return;
-  saveEdits();
-  const [moved]=data[tab][srcSi].items.splice(srcIi,1);
-  data[tab][dstSi].items.splice(dstIi,0,moved);
-  render(tab);
+function onMouseDown(e){
+  e.preventDefault();
+  startDrag(getItemEl(this), e.clientY);
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
 }
-function onDragEnd(){
+
+function startDrag(item, clientY){
+  dragItem = item;
+  const rect = item.getBoundingClientRect();
+  dragOffsetY = clientY - rect.top;
+  dragStartY = clientY;
+  // Clone for visual
+  dragClone = item.cloneNode(true);
+  dragClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:0.85;z-index:9999;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,0.18);border-radius:8px;background:white;`;
+  document.body.appendChild(dragClone);
+  item.style.opacity='0.3';
+  document.body.style.userSelect='none';
+}
+
+function moveAt(clientY){
+  if(!dragClone) return;
+  dragClone.style.top = (clientY - dragOffsetY) + 'px';
+  // highlight target
+  dragClone.style.display='none';
+  const el = document.elementFromPoint(dragClone.getBoundingClientRect().left + 10, clientY);
+  dragClone.style.display='';
   document.querySelectorAll('.item').forEach(el=>el.classList.remove('drag-over'));
-  dragSrc=null;
+  const target = el ? el.closest('.item') : null;
+  if(target && target !== dragItem) target.classList.add('drag-over');
+}
+
+function onTouchMove(e){ e.preventDefault(); moveAt(e.touches[0].clientY); }
+function onMouseMove(e){ moveAt(e.clientY); }
+
+function endDrag(clientY){
+  if(!dragItem){ cleanup(); return; }
+  dragClone.style.display='none';
+  const el = document.elementFromPoint(dragClone.getBoundingClientRect().left + 10, clientY);
+  dragClone.style.display='';
+  const target = el ? el.closest('.item') : null;
+  if(target && target !== dragItem){
+    const tab = currentTab;
+    const srcSi=parseInt(dragItem.dataset.si), srcIi=parseInt(dragItem.dataset.ii);
+    const dstSi=parseInt(target.dataset.si), dstIi=parseInt(target.dataset.ii);
+    if(!isNaN(srcSi)&&!isNaN(dstSi)){
+      saveEdits();
+      const [moved]=data[tab][srcSi].items.splice(srcIi,1);
+      data[tab][dstSi].items.splice(dstIi,0,moved);
+      render(tab);
+    }
+  }
+  cleanup();
+}
+
+function onTouchEnd(e){
+  endDrag(e.changedTouches[0].clientY);
+  document.removeEventListener('touchmove', onTouchMove);
+  document.removeEventListener('touchend', onTouchEnd);
+}
+function onMouseUp(e){
+  endDrag(e.clientY);
+  document.removeEventListener('mousemove', onMouseMove);
+  document.removeEventListener('mouseup', onMouseUp);
+}
+
+function cleanup(){
+  if(dragClone) dragClone.remove();
+  if(dragItem) dragItem.style.opacity='';
+  document.querySelectorAll('.item').forEach(el=>el.classList.remove('drag-over'));
+  document.body.style.userSelect='';
+  dragItem=null; dragClone=null;
+}
+
+
+// ---- longterm / once panel class ----
+function getPanelClass(tab){
+  if(tab==='arrive') return 'arrive-tab';
+  if(tab==='leave') return 'leave-tab';
+  if(tab==='longterm') return 'longterm-tab';
+  if(tab==='once') return 'once-tab';
+  return '';
+}
+
+// ---- Schedule ----
+const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const TIME_LABELS = ['午前','昼','夕方','夜'];
+
+function renderSchedule(){
+  const el = document.getElementById('schedule-content');
+  if(!el) return;
+  const now = new Date();
+  const yr = now.getFullYear();
+  const mo = now.getMonth(); // 0-based
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <span style="font-size:14px;font-weight:500">${yr}年 利用スケジュール</span>
+    <button onclick="openAddSchedule()" style="padding:6px 14px;font-size:13px;border:0.5px solid #ccc;border-radius:8px;background:white;cursor:pointer">＋ 追加</button>
+  </div>`;
+
+  // Mini calendar: show 3 months from current
+  for(let m=0; m<3; m++){
+    const mm = (mo+m)%12;
+    const yy = yr + Math.floor((mo+m)/12);
+    html += renderMiniMonth(yy, mm);
+  }
+
+  // List
+  html += `<div style="margin-top:1.25rem">`;
+  const sorted = [...scheduleData].sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  if(sorted.length===0){
+    html += `<p style="font-size:13px;color:#aaa;text-align:center;padding:1rem">まだ予定がありません</p>`;
+  } else {
+    sorted.forEach((s,i)=>{
+      const isPast = s.endDate < now.toISOString().slice(0,10);
+      html += `<div style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:8px;border:0.5px solid #e0e0e0;opacity:${isPast?0.5:1}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:14px;font-weight:500;color:#1a1a1a">${s.name} <span style="font-weight:400;color:#888">（${s.people}名）</span></div>
+            <div style="font-size:12px;color:#888;margin-top:3px">${formatDate(s.startDate)} ${s.startTime} 〜 ${formatDate(s.endDate)} ${s.endTime}</div>
+            ${s.memo?`<div style="font-size:12px;color:#aaa;margin-top:2px">${s.memo}</div>`:''}
+          </div>
+          <button onclick="deleteSchedule(${i})" style="font-size:11px;color:#ccc;background:none;border:none;cursor:pointer;padding:2px 6px">✕</button>
+        </div>
+      </div>`;
+    });
+  }
+  html += `</div>`;
+
+  // Add form (hidden by default)
+  html += `<div id="schedule-form" style="display:none;background:white;border-radius:12px;padding:16px;margin-top:1rem;border:0.5px solid #e0e0e0">
+    <div style="font-size:13px;font-weight:500;margin-bottom:12px">新しい予定を追加</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div><label style="font-size:11px;color:#888">利用者名</label><input id="sf-name" style="width:100%;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none" placeholder="例：翼家族"></div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><label style="font-size:11px;color:#888">開始日</label><input id="sf-start-date" type="date" style="width:100%;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none"></div>
+        <div><label style="font-size:11px;color:#888">時間帯</label><select id="sf-start-time" style="margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><label style="font-size:11px;color:#888">終了日</label><input id="sf-end-date" type="date" style="width:100%;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none"></div>
+        <div><label style="font-size:11px;color:#888">時間帯</label><select id="sf-end-time" style="margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select></div>
+      </div>
+      <div><label style="font-size:11px;color:#888">人数</label><input id="sf-people" type="number" min="1" value="1" style="width:80px;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none"></div>
+      <div><label style="font-size:11px;color:#888">メモ（任意）</label><input id="sf-memo" style="width:100%;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none" placeholder="例：子供2名含む"></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="submitSchedule()" style="flex:1;padding:10px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer">追加する</button>
+        <button onclick="document.getElementById('schedule-form').style.display='none'" style="padding:10px 16px;background:white;border:0.5px solid #ccc;border-radius:8px;font-size:14px;cursor:pointer">キャンセル</button>
+      </div>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+function renderMiniMonth(yr, mo){
+  const daysInMonth = new Date(yr, mo+1, 0).getDate();
+  const firstDay = new Date(yr, mo, 1).getDay(); // 0=Sun
+  const usedDays = new Set();
+  scheduleData.forEach(s=>{
+    const sd = new Date(s.startDate), ed = new Date(s.endDate);
+    for(let d=new Date(sd); d<=ed; d.setDate(d.getDate()+1)){
+      if(d.getFullYear()===yr && d.getMonth()===mo) usedDays.add(d.getDate());
+    }
+  });
+
+  const dayNames = ['日','月','火','水','木','金','土'];
+  let html = `<div style="background:white;border-radius:12px;padding:14px;margin-bottom:10px;border:0.5px solid #e8e8e6">
+    <div style="font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:10px">${yr}年 ${MONTHS[mo]}</div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">`;
+  dayNames.forEach((d,i)=>{
+    html+=`<div style="font-size:10px;color:${i===0?'#e85050':i===6?'#5080e8':'#aaa'};padding:2px 0">${d}</div>`;
+  });
+  for(let i=0;i<firstDay;i++) html+=`<div></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const dow = (firstDay+d-1)%7;
+    const isUsed = usedDays.has(d);
+    const col = dow===0?'#e85050':dow===6?'#5080e8':'#1a1a1a';
+    html+=`<div style="font-size:11px;padding:3px 2px;border-radius:4px;${isUsed?'background:#1D9E75;color:white;font-weight:600':'color:'+col}">${d}</div>`;
+  }
+  html+=`</div></div>`;
+  return html;
+}
+
+function formatDate(dateStr){
+  if(!dateStr) return '';
+  const [y,m,d] = dateStr.split('-');
+  return `${parseInt(m)}月${parseInt(d)}日`;
+}
+
+function openAddSchedule(){
+  const f = document.getElementById('schedule-form');
+  if(f) f.style.display = f.style.display==='none'?'block':'none';
+}
+
+function submitSchedule(){
+  const name = document.getElementById('sf-name').value.trim();
+  const startDate = document.getElementById('sf-start-date').value;
+  const startTime = document.getElementById('sf-start-time').value;
+  const endDate = document.getElementById('sf-end-date').value;
+  const endTime = document.getElementById('sf-end-time').value;
+  const people = parseInt(document.getElementById('sf-people').value)||1;
+  const memo = document.getElementById('sf-memo').value.trim();
+  if(!name||!startDate||!endDate){ alert('利用者名・開始日・終了日は必須です'); return; }
+  if(endDate < startDate){ alert('終了日は開始日以降にしてください'); return; }
+  scheduleData.push({name,startDate,startTime,endDate,endTime,people,memo});
+  saveScheduleToSheet();
+  renderSchedule();
+}
+
+function deleteSchedule(i){
+  if(!confirm('この予定を削除しますか？')) return;
+  scheduleData.splice(i,1);
+  saveScheduleToSheet();
+  renderSchedule();
+}
+
+async function saveScheduleToSheet(){
+  try{
+    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveSchedule',scheduleData}),headers:{'Content-Type':'text/plain'}});
+  }catch(e){}
+}
+
+// updateProgressをlongterm/once対応に拡張
+const _origUpdateProgress = updateProgress;
+function updateAllProgress(){
+  ['arrive','leave','longterm','once'].forEach(tab=>{
+    let total=0,done=0;
+    if(data[tab]) data[tab].forEach((sec,si)=>sec.items.forEach((_,ii)=>{total++;if(checked[tab]&&checked[tab][tab+'-'+si+'-'+ii])done++;}));
+    const pct=total?Math.round(done/total*100):0;
+    const bar=document.getElementById(tab+'-bar');
+    const label=document.getElementById(tab+'-label');
+    if(bar) bar.style.width=pct+'%';
+    if(label) label.textContent=done+' / '+total+' 完了';
+    const doneEl=document.getElementById(tab+'-done');
+    if(doneEl) doneEl.style.display=(done===total&&total>0&&!isEditing)?'block':'none';
+  });
 }
 
 loadFromSheet();
