@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -121,6 +122,7 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
   </div>
 
   <!-- スクロールエリア：チェックリスト本体 -->
+
   <div class="scroll-content">
     <div id="arrive-panel" class="arrive-tab">
       <div id="arrive-sections"></div>
@@ -141,32 +143,35 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
       </div>
     </div>
 
-    <!-- 長期不在パネル -->
-    <div id="longterm-panel" style="display:none">
-      <div id="longterm-sections"></div>
-      <button class="add-section-btn" onclick="addSection('longterm')">+ セクションを追加</button>
-      <div class="all-done" id="longterm-done">長期不在の準備完了です ☆</div>
-      <div class="bottom-bar">
-        <button class="reset-btn" onclick="resetPanel('longterm')">チェックをリセット</button>
-        <span class="sync-status" id="longterm-sync"></span>
-      </div>
-    </div>
+```
+<!-- 長期不在パネル -->
+<div id="longterm-panel" style="display:none">
+  <div id="longterm-sections"></div>
+  <button class="add-section-btn" onclick="addSection('longterm')">+ セクションを追加</button>
+  <div class="all-done" id="longterm-done">長期不在の準備完了です ☆</div>
+  <div class="bottom-bar">
+    <button class="reset-btn" onclick="resetPanel('longterm')">チェックをリセット</button>
+    <span class="sync-status" id="longterm-sync"></span>
+  </div>
+</div>
 
-    <!-- 1回きりタスクパネル -->
-    <div id="once-panel" style="display:none">
-      <div id="once-sections"></div>
-      <button class="add-section-btn" onclick="addSection('once')">+ セクションを追加</button>
-      <div class="all-done" id="once-done">すべての初期整備が完了しました ☆</div>
-      <div class="bottom-bar">
-        <button class="reset-btn" onclick="resetPanel('once')">チェックをリセット</button>
-        <span class="sync-status" id="once-sync"></span>
-      </div>
-    </div>
+<!-- 1回きりタスクパネル -->
+<div id="once-panel" style="display:none">
+  <div id="once-sections"></div>
+  <button class="add-section-btn" onclick="addSection('once')">+ セクションを追加</button>
+  <div class="all-done" id="once-done">すべての初期整備が完了しました ☆</div>
+  <div class="bottom-bar">
+    <button class="reset-btn" onclick="resetPanel('once')">チェックをリセット</button>
+    <span class="sync-status" id="once-sync"></span>
+  </div>
+</div>
 
-    <!-- スケジュールパネル -->
-    <div id="schedule-panel" style="display:none">
-      <div id="schedule-content"></div>
-    </div>
+<!-- スケジュールパネル -->
+<div id="schedule-panel" style="display:none">
+  <div id="schedule-content"></div>
+</div>
+```
+
   </div>
 </div>
 
@@ -628,8 +633,17 @@ async function loadFromSheet(){
         newChecked[tab][tab+'-'+si+'-'+ii]=true;
       }
     });
+    // longterm/onceがシートに未登録の場合はdefaultDataで補完して保存
+    let needsSave=false;
+    ['longterm','once'].forEach(tab=>{
+      if(newData[tab].length===0){
+        newData[tab]=JSON.parse(JSON.stringify(defaultData[tab]));
+        needsSave=true;
+      }
+    });
     data=newData; checked=newChecked;
-    render('arrive'); render('leave');
+    if(needsSave) saveToSheet();
+    render('arrive'); render('leave'); render('longterm'); render('once');
   }catch(e){setSync(currentTab,'読み込みエラー','error');}
 }
 
@@ -909,65 +923,133 @@ function getPanelClass(tab){
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const TIME_LABELS = ['午前','昼','夕方','夜'];
 
+const USERS = [
+  { label: '福塚家',       color: '#40aadd', defaultPeople: 3 },
+  { label: '福塚ジジババ', color: '#1D9E75', defaultPeople: 2 },
+  { label: '高城家',       color: '#e05080', defaultPeople: 3 },
+  { label: 'その他',       color: '#e07828', defaultPeople: 0 },
+];
+
+let editingScheduleIndex = null; // null=add, number=edit
+
+function getDaySchedules(yr, mo, d) {
+  const dateStr = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  return scheduleData.filter(s => s.startDate <= dateStr && s.endDate >= dateStr);
+}
+
 function renderSchedule(){
   const el = document.getElementById('schedule-content');
   if(!el) return;
   const now = new Date();
+  const todayStr = now.toISOString().slice(0,10);
   const yr = now.getFullYear();
-  const mo = now.getMonth(); // 0-based
+  const mo = now.getMonth();
 
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-    <span style="font-size:14px;font-weight:500">${yr}年 利用スケジュール</span>
-    <button onclick="openAddSchedule()" style="padding:6px 14px;font-size:13px;border:0.5px solid #ccc;border-radius:8px;background:white;cursor:pointer">＋ 追加</button>
+  // Legend
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${USERS.map(u=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#666">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${u.color}"></span>${u.label}
+      </span>`).join('')}
+    </div>
+    <button onclick="openScheduleForm(null, null)" style="flex-shrink:0;margin-left:8px;padding:6px 12px;font-size:13px;border:0.5px solid #ccc;border-radius:8px;background:white;cursor:pointer">＋ 追加</button>
   </div>`;
 
-  // Mini calendar: show 3 months from current
+  // 3 months calendar
   for(let m=0; m<3; m++){
     const mm = (mo+m)%12;
     const yy = yr + Math.floor((mo+m)/12);
-    html += renderMiniMonth(yy, mm);
+    html += renderMiniMonth(yy, mm, todayStr);
   }
 
   // List
   html += `<div style="margin-top:1.25rem">`;
-  const sorted = [...scheduleData].sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const sorted = scheduleData.map((s,i)=>({...s,_i:i})).sort((a,b)=>a.startDate.localeCompare(b.startDate));
   if(sorted.length===0){
     html += `<p style="font-size:13px;color:#aaa;text-align:center;padding:1rem">まだ予定がありません</p>`;
   } else {
-    sorted.forEach((s,i)=>{
-      const isPast = s.endDate < now.toISOString().slice(0,10);
-      html += `<div style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:8px;border:0.5px solid #e0e0e0;opacity:${isPast?0.5:1}">
+    sorted.forEach(s=>{
+      const i = s._i;
+      const user = USERS.find(u=>u.label===s.name)||USERS[3];
+      const isPast = s.endDate < todayStr;
+      html += `<div onclick="openScheduleForm(${i}, null)" style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:4px solid ${user.color};border-top:0.5px solid #e0e0e0;border-right:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;opacity:${isPast?0.5:1};cursor:pointer">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <div style="font-size:14px;font-weight:500;color:#1a1a1a">${s.name} <span style="font-weight:400;color:#888">（${s.people}名）</span></div>
+            <div style="font-size:14px;font-weight:500;color:${user.color}">${s.name} <span style="font-weight:400;color:#888">（${s.people}名）</span></div>
             <div style="font-size:12px;color:#888;margin-top:3px">${formatDate(s.startDate)} ${s.startTime} 〜 ${formatDate(s.endDate)} ${s.endTime}</div>
             ${s.memo?`<div style="font-size:12px;color:#aaa;margin-top:2px">${s.memo}</div>`:''}
           </div>
-          <button onclick="deleteSchedule(${i})" style="font-size:11px;color:#ccc;background:none;border:none;cursor:pointer;padding:2px 6px">✕</button>
+          <span style="font-size:11px;color:#bbb;margin-top:2px">編集 ›</span>
         </div>
       </div>`;
     });
   }
   html += `</div>`;
 
-  // Add form (hidden by default)
-  html += `<div id="schedule-form" style="display:none;background:white;border-radius:12px;padding:16px;margin-top:1rem;border:0.5px solid #e0e0e0">
-    <div style="font-size:13px;font-weight:500;margin-bottom:12px">新しい予定を追加</div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div><label style="font-size:11px;color:#888">利用者名</label><input id="sf-name" style="width:100%;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none" placeholder="例：翼家族"></div>
-      <div style="display:flex;gap:8px">
-        <div style="flex:1"><label style="font-size:11px;color:#888">開始日</label><input id="sf-start-date" type="date" style="width:100%;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none"></div>
-        <div><label style="font-size:11px;color:#888">時間帯</label><select id="sf-start-time" style="margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select></div>
+  // Modal overlay for form
+  html += `<div id="schedule-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:flex-end;justify-content:center" onclick="closeScheduleForm(event)">
+    <div style="background:#f5f5f3;border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span id="sf-title" style="font-size:15px;font-weight:500">予定を追加</span>
+        <button onclick="closeScheduleForm()" style="font-size:20px;color:#aaa;background:none;border:none;cursor:pointer;line-height:1">✕</button>
       </div>
-      <div style="display:flex;gap:8px">
-        <div style="flex:1"><label style="font-size:11px;color:#888">終了日</label><input id="sf-end-date" type="date" style="width:100%;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none"></div>
-        <div><label style="font-size:11px;color:#888">時間帯</label><select id="sf-end-time" style="margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select></div>
-      </div>
-      <div><label style="font-size:11px;color:#888">人数</label><input id="sf-people" type="number" min="1" value="1" style="width:80px;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none"></div>
-      <div><label style="font-size:11px;color:#888">メモ（任意）</label><input id="sf-memo" style="width:100%;margin-top:4px;padding:8px;border:0.5px solid #ccc;border-radius:6px;font-size:14px;outline:none" placeholder="例：子供2名含む"></div>
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <button onclick="submitSchedule()" style="flex:1;padding:10px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer">追加する</button>
-        <button onclick="document.getElementById('schedule-form').style.display='none'" style="padding:10px 16px;background:white;border:0.5px solid #ccc;border-radius:8px;font-size:14px;cursor:pointer">キャンセル</button>
+      <div style="display:flex;flex-direction:column;gap:12px">
+
+        <!-- User selector -->
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:6px">利用者</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="sf-user-btns">
+            ${USERS.map((u,ui)=>`<button onclick="selectUser(${ui})" id="sf-user-${ui}" style="padding:10px 8px;border:1.5px solid #e0e0e0;border-radius:8px;background:white;font-size:13px;cursor:pointer;text-align:left;color:#666">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${u.color};margin-right:6px;vertical-align:middle"></span>${u.label}
+            </button>`).join('')}
+          </div>
+        </div>
+
+        <!-- Custom name (その他のみ) -->
+        <div id="sf-custom-wrap" style="display:none">
+          <div style="font-size:11px;color:#888;margin-bottom:4px">名前（自由入力）</div>
+          <input id="sf-custom-name" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：田中さん一家">
+        </div>
+
+        <!-- Dates -->
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <div style="font-size:11px;color:#888;margin-bottom:4px">開始日</div>
+            <input id="sf-start-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
+          </div>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:4px">時間帯</div>
+            <select id="sf-start-time" style="padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <div style="font-size:11px;color:#888;margin-bottom:4px">終了日</div>
+            <input id="sf-end-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
+          </div>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:4px">時間帯</div>
+            <select id="sf-end-time" style="padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select>
+          </div>
+        </div>
+
+        <!-- People -->
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">人数</div>
+          <input id="sf-people" type="number" min="0" value="1" style="width:80px;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
+        </div>
+
+        <!-- Memo -->
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">メモ（任意）</div>
+          <input id="sf-memo" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：子供2名含む">
+        </div>
+
+        <!-- Buttons -->
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onclick="submitSchedule()" style="flex:1;padding:12px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer" id="sf-submit-btn">追加する</button>
+        </div>
+        <button id="sf-delete-btn" onclick="deleteScheduleEditing()" style="display:none;width:100%;padding:12px;background:white;color:#cc4040;border:1px solid #cc4040;border-radius:8px;font-size:14px;cursor:pointer">この予定を削除</button>
       </div>
     </div>
   </div>`;
@@ -975,30 +1057,126 @@ function renderSchedule(){
   el.innerHTML = html;
 }
 
-function renderMiniMonth(yr, mo){
-  const daysInMonth = new Date(yr, mo+1, 0).getDate();
-  const firstDay = new Date(yr, mo, 1).getDay(); // 0=Sun
-  const usedDays = new Set();
-  scheduleData.forEach(s=>{
-    const sd = new Date(s.startDate), ed = new Date(s.endDate);
-    for(let d=new Date(sd); d<=ed; d.setDate(d.getDate()+1)){
-      if(d.getFullYear()===yr && d.getMonth()===mo) usedDays.add(d.getDate());
-    }
-  });
+let selectedUserIndex = null;
 
+function selectUser(ui){
+  selectedUserIndex = ui;
+  document.querySelectorAll('[id^="sf-user-"]').forEach((btn,i)=>{
+    const u = USERS[i];
+    btn.style.border = i===ui ? `2px solid ${u.color}` : '1.5px solid #e0e0e0';
+    btn.style.background = i===ui ? u.color+'18' : 'white';
+    btn.style.color = i===ui ? u.color : '#666';
+    btn.style.fontWeight = i===ui ? '600' : '400';
+  });
+  document.getElementById('sf-custom-wrap').style.display = ui===3 ? 'block' : 'none';
+  // default people
+  document.getElementById('sf-people').value = USERS[ui].defaultPeople;
+}
+
+function openScheduleForm(index, dateStr){
+  editingScheduleIndex = index;
+  renderSchedule(); // re-render to get fresh modal
+  const modal = document.getElementById('schedule-modal');
+  modal.style.display = 'flex';
+  selectedUserIndex = null;
+
+  if(index !== null && index !== undefined){
+    // Edit mode
+    document.getElementById('sf-title').textContent = '予定を編集';
+    document.getElementById('sf-submit-btn').textContent = '更新する';
+    document.getElementById('sf-delete-btn').style.display = 'block';
+    const s = scheduleData[index];
+    const ui = USERS.findIndex(u=>u.label===s.name);
+    selectUser(ui>=0 ? ui : 3);
+    if(ui===3 || ui<0) document.getElementById('sf-custom-name').value = s.name;
+    document.getElementById('sf-start-date').value = s.startDate;
+    document.getElementById('sf-start-time').value = s.startTime;
+    document.getElementById('sf-end-date').value = s.endDate;
+    document.getElementById('sf-end-time').value = s.endTime;
+    document.getElementById('sf-people').value = s.people;
+    document.getElementById('sf-memo').value = s.memo||'';
+  } else {
+    // Add mode
+    document.getElementById('sf-title').textContent = '予定を追加';
+    document.getElementById('sf-submit-btn').textContent = '追加する';
+    document.getElementById('sf-delete-btn').style.display = 'none';
+    if(dateStr){
+      document.getElementById('sf-start-date').value = dateStr;
+      document.getElementById('sf-end-date').value = dateStr;
+    }
+  }
+  editingScheduleIndex = index;
+}
+
+function closeScheduleForm(e){
+  if(e && e.target !== document.getElementById('schedule-modal')) return;
+  const modal = document.getElementById('schedule-modal');
+  if(modal) modal.style.display = 'none';
+}
+
+function submitSchedule(){
+  const ui = selectedUserIndex;
+  if(ui===null){ alert('利用者を選択してください'); return; }
+  const name = ui===3 ? (document.getElementById('sf-custom-name').value.trim()||'その他') : USERS[ui].label;
+  const startDate = document.getElementById('sf-start-date').value;
+  const startTime = document.getElementById('sf-start-time').value;
+  const endDate = document.getElementById('sf-end-date').value;
+  const endTime = document.getElementById('sf-end-time').value;
+  const people = parseInt(document.getElementById('sf-people').value)||0;
+  const memo = document.getElementById('sf-memo').value.trim();
+  if(!startDate||!endDate){ alert('開始日・終了日を入力してください'); return; }
+  if(endDate < startDate){ alert('終了日は開始日以降にしてください'); return; }
+  const entry = {name,startDate,startTime,endDate,endTime,people,memo};
+  if(editingScheduleIndex !== null && editingScheduleIndex !== undefined){
+    scheduleData[editingScheduleIndex] = entry;
+  } else {
+    scheduleData.push(entry);
+  }
+  saveScheduleToSheet();
+  renderSchedule();
+}
+
+function deleteScheduleEditing(){
+  if(editingScheduleIndex===null) return;
+  if(!confirm('この予定を削除しますか？')) return;
+  scheduleData.splice(editingScheduleIndex,1);
+  saveScheduleToSheet();
+  renderSchedule();
+}
+
+function renderMiniMonth(yr, mo, todayStr){
+  const daysInMonth = new Date(yr, mo+1, 0).getDate();
+  const firstDay = new Date(yr, mo, 1).getDay();
   const dayNames = ['日','月','火','水','木','金','土'];
+  const dateKey = (d) => `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
   let html = `<div style="background:white;border-radius:12px;padding:14px;margin-bottom:10px;border:0.5px solid #e8e8e6">
     <div style="font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:10px">${yr}年 ${MONTHS[mo]}</div>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">`;
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center">`;
   dayNames.forEach((d,i)=>{
     html+=`<div style="font-size:10px;color:${i===0?'#e85050':i===6?'#5080e8':'#aaa'};padding:2px 0">${d}</div>`;
   });
   for(let i=0;i<firstDay;i++) html+=`<div></div>`;
   for(let d=1;d<=daysInMonth;d++){
+    const dk = dateKey(d);
     const dow = (firstDay+d-1)%7;
-    const isUsed = usedDays.has(d);
-    const col = dow===0?'#e85050':dow===6?'#5080e8':'#1a1a1a';
-    html+=`<div style="font-size:11px;padding:3px 2px;border-radius:4px;${isUsed?'background:#1D9E75;color:white;font-weight:600':'color:'+col}">${d}</div>`;
+    const isToday = dk===todayStr;
+    const dayScheds = getDaySchedules(yr, mo, d);
+    const textCol = dow===0?'#e85050':dow===6?'#5080e8':'#1a1a1a';
+
+    if(dayScheds.length===0){
+      html+=`<div onclick="openScheduleForm(null,'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;color:${textCol};cursor:pointer;${isToday?'outline:2px solid #1a1a1a;font-weight:700':''}">${d}</div>`;
+    } else if(dayScheds.length===1){
+      const u = USERS.find(u=>u.label===dayScheds[0].name)||USERS[3];
+      const si = scheduleData.indexOf(dayScheds[0]);
+      html+=`<div onclick="openScheduleForm(${si},'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;background:${u.color};color:white;font-weight:600;cursor:pointer;${isToday?'outline:2px solid #1a1a1a':''};">${d}</div>`;
+    } else {
+      // Multiple: split background vertically
+      const colors = dayScheds.map(s=>(USERS.find(u=>u.label===s.name)||USERS[3]).color);
+      const pct = 100/colors.length;
+      const gradient = colors.map((c,ci)=>`${c} ${ci*pct}% ${(ci+1)*pct}%`).join(',');
+      html+=`<div onclick="openScheduleForm(${scheduleData.indexOf(dayScheds[0])},'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;background:linear-gradient(to right,${gradient});color:white;font-weight:600;cursor:pointer;${isToday?'outline:2px solid #1a1a1a':''};">${d}</div>`;
+    }
   }
   html+=`</div></div>`;
   return html;
@@ -1008,33 +1186,6 @@ function formatDate(dateStr){
   if(!dateStr) return '';
   const [y,m,d] = dateStr.split('-');
   return `${parseInt(m)}月${parseInt(d)}日`;
-}
-
-function openAddSchedule(){
-  const f = document.getElementById('schedule-form');
-  if(f) f.style.display = f.style.display==='none'?'block':'none';
-}
-
-function submitSchedule(){
-  const name = document.getElementById('sf-name').value.trim();
-  const startDate = document.getElementById('sf-start-date').value;
-  const startTime = document.getElementById('sf-start-time').value;
-  const endDate = document.getElementById('sf-end-date').value;
-  const endTime = document.getElementById('sf-end-time').value;
-  const people = parseInt(document.getElementById('sf-people').value)||1;
-  const memo = document.getElementById('sf-memo').value.trim();
-  if(!name||!startDate||!endDate){ alert('利用者名・開始日・終了日は必須です'); return; }
-  if(endDate < startDate){ alert('終了日は開始日以降にしてください'); return; }
-  scheduleData.push({name,startDate,startTime,endDate,endTime,people,memo});
-  saveScheduleToSheet();
-  renderSchedule();
-}
-
-function deleteSchedule(i){
-  if(!confirm('この予定を削除しますか？')) return;
-  scheduleData.splice(i,1);
-  saveScheduleToSheet();
-  renderSchedule();
 }
 
 async function saveScheduleToSheet(){
@@ -1062,5 +1213,6 @@ function updateAllProgress(){
 loadFromSheet();
 startPolling();
 </script>
+
 </body>
 </html>
