@@ -932,7 +932,113 @@ const USERS = [
 ];
 
 let editingScheduleIndex = null;
-let selectedUserIndices = []; // 複数選択対応
+let selectedUserIndices = [];
+
+function renderSchedule(){
+  const el = document.getElementById('schedule-content');
+  if(!el) return;
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0,10);
+  const yr = now.getFullYear();
+  const mo = now.getMonth();
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:6px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${USERS.map(u=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#666">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${u.color}"></span>${u.label}
+      </span>`).join('')}
+    </div>
+    <button onclick="openScheduleForm(null, null)" style="padding:6px 12px;font-size:13px;border:0.5px solid #ccc;border-radius:8px;background:white;cursor:pointer">＋ 追加</button>
+  </div>`;
+
+  for(let m=0; m<3; m++){
+    const mm = (mo+m)%12;
+    const yy = yr + Math.floor((mo+m)/12);
+    html += renderMiniMonth(yy, mm, todayStr);
+  }
+
+  html += `<div style="margin-top:1.25rem">`;
+  const sorted = scheduleData.map((s,i)=>Object.assign({},s,{_i:i})).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  if(sorted.length===0){
+    html += `<p style="font-size:13px;color:#aaa;text-align:center;padding:1rem">まだ予定がありません</p>`;
+  } else {
+    sorted.forEach(s=>{
+      const i = s._i;
+      const firstName = s.name.split(',')[0].trim();
+      const user = USERS.find(u=>u.label===firstName)||USERS[3];
+      const isPast = s.endDate < todayStr;
+      const peopleStr = (s.people!=='-'&&s.people!==''&&s.people!==undefined) ? ` <span style="font-weight:400;color:#888">（${s.people}名）</span>` : '';
+      const stT = s.startTime&&s.startTime!=='ー' ? s.startTime : '';
+      const enT = s.endTime&&s.endTime!=='ー' ? s.endTime : '';
+      const timeDisplay = (stT||enT) ? ` ${stT}〜${enT}` : '';
+      html += `<div onclick="openScheduleForm(${i}, null)" style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:4px solid ${user.color};border-top:0.5px solid #e0e0e0;border-right:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;opacity:${isPast?0.5:1};cursor:pointer">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:14px;font-weight:500;color:${user.color}">${s.name}${peopleStr}</div>
+            <div style="font-size:12px;color:#888;margin-top:3px">${formatDate(s.startDate)}${timeDisplay} 〜 ${formatDate(s.endDate)}</div>
+            ${s.memo?`<div style="font-size:12px;color:#aaa;margin-top:2px">${s.memo}</div>`:''}
+          </div>
+          <span style="font-size:11px;color:#bbb;margin-top:2px">編集 ›</span>
+        </div>
+      </div>`;
+    });
+  }
+  html += `</div>`;
+
+  html += `<div id="schedule-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:flex-end;justify-content:center" onclick="closeScheduleForm(event)">
+    <div style="background:#f5f5f3;border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span id="sf-title" style="font-size:15px;font-weight:500">予定を追加</span>
+        <button onclick="closeScheduleForm()" style="font-size:20px;color:#aaa;background:none;border:none;cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:6px">利用者（複数選択可）</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="sf-user-btns">
+            ${USERS.map((u,ui)=>`<button onclick="selectUser(${ui})" id="sf-user-${ui}" style="padding:10px 8px;border:1.5px solid #e0e0e0;border-radius:8px;background:white;font-size:13px;cursor:pointer;text-align:left;color:#666">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${u.color};margin-right:6px;vertical-align:middle"></span>${u.label}
+            </button>`).join('')}
+          </div>
+        </div>
+        <div id="sf-custom-wrap" style="display:none">
+          <div style="font-size:11px;color:#888;margin-bottom:4px">名前（自由入力）</div>
+          <input id="sf-custom-name" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：田中さん一家">
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1"><div style="font-size:11px;color:#888;margin-bottom:4px">開始日</div>
+            <input id="sf-start-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
+          </div>
+          <div><div style="font-size:11px;color:#888;margin-bottom:4px">時間帯</div>
+            <select id="sf-start-time" style="padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1"><div style="font-size:11px;color:#888;margin-bottom:4px">終了日</div>
+            <input id="sf-end-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
+          </div>
+          <div><div style="font-size:11px;color:#888;margin-bottom:4px">時間帯</div>
+            <select id="sf-end-time" style="padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div><div style="font-size:11px;color:#888;margin-bottom:4px">人数</div>
+          <select id="sf-people" style="padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
+            <option value="-">ー</option>
+            ${Array.from({length:20},(_,i)=>`<option value="${i+1}">${i+1}名</option>`).join('')}
+          </select>
+        </div>
+        <div><div style="font-size:11px;color:#888;margin-bottom:4px">メモ（任意）</div>
+          <input id="sf-memo" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：子供2名含む">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onclick="submitSchedule()" style="flex:1;padding:12px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer" id="sf-submit-btn">追加する</button>
+        </div>
+        <button id="sf-delete-btn" onclick="deleteScheduleEditing()" style="display:none;width:100%;padding:12px;background:white;color:#cc4040;border:1px solid #cc4040;border-radius:8px;font-size:14px;cursor:pointer">この予定を削除</button>
+      </div>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
+}
 
 function selectUser(ui){
   const idx = selectedUserIndices.indexOf(ui);
