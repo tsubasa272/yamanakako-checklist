@@ -922,7 +922,7 @@ function getPanelClass(tab){
 
 // ---- Schedule ----
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-const TIME_LABELS = ['午前','昼','夕方','夜'];
+const TIME_LABELS = ['ー','午前','昼','夕方','夜'];
 
 const USERS = [
   { label: '福塚家',       color: '#40aadd', defaultPeople: 3 },
@@ -931,173 +931,78 @@ const USERS = [
   { label: 'その他',       color: '#e07828', defaultPeople: 0 },
 ];
 
-let editingScheduleIndex = null; // null=add, number=edit
-
-function getDaySchedules(yr, mo, d) {
-  const dateStr = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-  return scheduleData.filter(s => s.startDate <= dateStr && s.endDate >= dateStr);
-}
-
-function renderSchedule(){
-  const el = document.getElementById('schedule-content');
-  if(!el) return;
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0,10);
-  const yr = now.getFullYear();
-  const mo = now.getMonth();
-
-  // Legend
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      ${USERS.map(u=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#666">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${u.color}"></span>${u.label}
-      </span>`).join('')}
-    </div>
-    <button onclick="openScheduleForm(null, null)" style="flex-shrink:0;margin-left:8px;padding:6px 12px;font-size:13px;border:0.5px solid #ccc;border-radius:8px;background:white;cursor:pointer">＋ 追加</button>
-  </div>`;
-
-  // 3 months calendar
-  for(let m=0; m<3; m++){
-    const mm = (mo+m)%12;
-    const yy = yr + Math.floor((mo+m)/12);
-    html += renderMiniMonth(yy, mm, todayStr);
-  }
-
-  // List
-  html += `<div style="margin-top:1.25rem">`;
-  const sorted = scheduleData.map((s,i)=>Object.assign({},s,{_i:i})).sort((a,b)=>a.startDate.localeCompare(b.startDate));
-  if(sorted.length===0){
-    html += `<p style="font-size:13px;color:#aaa;text-align:center;padding:1rem">まだ予定がありません</p>`;
-  } else {
-    sorted.forEach(s=>{
-      const i = s._i;
-      const user = USERS.find(u=>u.label===s.name)||USERS[3];
-      const isPast = s.endDate < todayStr;
-      html += `<div onclick="openScheduleForm(${i}, null)" style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:4px solid ${user.color};border-top:0.5px solid #e0e0e0;border-right:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;opacity:${isPast?0.5:1};cursor:pointer">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div>
-            <div style="font-size:14px;font-weight:500;color:${user.color}">${s.name} <span style="font-weight:400;color:#888">（${s.people}名）</span></div>
-            <div style="font-size:12px;color:#888;margin-top:3px">${formatDate(s.startDate)} ${s.startTime} 〜 ${formatDate(s.endDate)} ${s.endTime}</div>
-            ${s.memo?`<div style="font-size:12px;color:#aaa;margin-top:2px">${s.memo}</div>`:''}
-          </div>
-          <span style="font-size:11px;color:#bbb;margin-top:2px">編集 ›</span>
-        </div>
-      </div>`;
-    });
-  }
-  html += `</div>`;
-
-  // Modal overlay for form
-  html += `<div id="schedule-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:flex-end;justify-content:center" onclick="closeScheduleForm(event)">
-    <div style="background:#f5f5f3;border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <span id="sf-title" style="font-size:15px;font-weight:500">予定を追加</span>
-        <button onclick="closeScheduleForm()" style="font-size:20px;color:#aaa;background:none;border:none;cursor:pointer;line-height:1">✕</button>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:12px">
-
-        <!-- User selector -->
-        <div>
-          <div style="font-size:11px;color:#888;margin-bottom:6px">利用者</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="sf-user-btns">
-            ${USERS.map((u,ui)=>`<button onclick="selectUser(${ui})" id="sf-user-${ui}" style="padding:10px 8px;border:1.5px solid #e0e0e0;border-radius:8px;background:white;font-size:13px;cursor:pointer;text-align:left;color:#666">
-              <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${u.color};margin-right:6px;vertical-align:middle"></span>${u.label}
-            </button>`).join('')}
-          </div>
-        </div>
-
-        <!-- Custom name (その他のみ) -->
-        <div id="sf-custom-wrap" style="display:none">
-          <div style="font-size:11px;color:#888;margin-bottom:4px">名前（自由入力）</div>
-          <input id="sf-custom-name" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：田中さん一家">
-        </div>
-
-        <!-- Dates -->
-        <div style="display:flex;gap:8px">
-          <div style="flex:1">
-            <div style="font-size:11px;color:#888;margin-bottom:4px">開始日</div>
-            <input id="sf-start-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
-          </div>
-          <div>
-            <div style="font-size:11px;color:#888;margin-bottom:4px">時間帯</div>
-            <select id="sf-start-time" style="padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <div style="flex:1">
-            <div style="font-size:11px;color:#888;margin-bottom:4px">終了日</div>
-            <input id="sf-end-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
-          </div>
-          <div>
-            <div style="font-size:11px;color:#888;margin-bottom:4px">時間帯</div>
-            <select id="sf-end-time" style="padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select>
-          </div>
-        </div>
-
-        <!-- People -->
-        <div>
-          <div style="font-size:11px;color:#888;margin-bottom:4px">人数</div>
-          <input id="sf-people" type="number" min="0" value="1" style="width:80px;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
-        </div>
-
-        <!-- Memo -->
-        <div>
-          <div style="font-size:11px;color:#888;margin-bottom:4px">メモ（任意）</div>
-          <input id="sf-memo" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：子供2名含む">
-        </div>
-
-        <!-- Buttons -->
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button onclick="submitSchedule()" style="flex:1;padding:12px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer" id="sf-submit-btn">追加する</button>
-        </div>
-        <button id="sf-delete-btn" onclick="deleteScheduleEditing()" style="display:none;width:100%;padding:12px;background:white;color:#cc4040;border:1px solid #cc4040;border-radius:8px;font-size:14px;cursor:pointer">この予定を削除</button>
-      </div>
-    </div>
-  </div>`;
-
-  el.innerHTML = html;
-}
-
-let selectedUserIndex = null;
+let editingScheduleIndex = null;
+let selectedUserIndices = []; // 複数選択対応
 
 function selectUser(ui){
-  selectedUserIndex = ui;
-  document.querySelectorAll('[id^="sf-user-"]').forEach((btn,i)=>{
-    const u = USERS[i];
-    btn.style.border = i===ui ? `2px solid ${u.color}` : '1.5px solid #e0e0e0';
-    btn.style.background = i===ui ? u.color+'18' : 'white';
-    btn.style.color = i===ui ? u.color : '#666';
-    btn.style.fontWeight = i===ui ? '600' : '400';
+  const idx = selectedUserIndices.indexOf(ui);
+  if(idx >= 0){
+    selectedUserIndices.splice(idx, 1);
+  } else {
+    selectedUserIndices.push(ui);
+  }
+  // ボタン見た目を更新
+  USERS.forEach((u,i)=>{
+    const btn = document.getElementById('sf-user-'+i);
+    if(!btn) return;
+    const sel = selectedUserIndices.includes(i);
+    btn.style.border = sel ? `2px solid ${u.color}` : '1.5px solid #e0e0e0';
+    btn.style.background = sel ? u.color+'22' : 'white';
+    btn.style.color = sel ? u.color : '#666';
+    btn.style.fontWeight = sel ? '600' : '400';
   });
-  document.getElementById('sf-custom-wrap').style.display = ui===3 ? 'block' : 'none';
-  // default people
-  document.getElementById('sf-people').value = USERS[ui].defaultPeople;
+  // その他のみ選択中なら自由入力欄を表示
+  const onlyOther = selectedUserIndices.length===1 && selectedUserIndices[0]===3;
+  const hasOther = selectedUserIndices.includes(3);
+  document.getElementById('sf-custom-wrap').style.display = hasOther ? 'block' : 'none';
+  // 人数を合算してデフォルト設定
+  let total = 0;
+  let allOther = selectedUserIndices.every(i=>i===3);
+  selectedUserIndices.forEach(i=>{
+    total += USERS[i].defaultPeople;
+  });
+  const peopleEl = document.getElementById('sf-people');
+  if(peopleEl){
+    if(selectedUserIndices.length === 0 || allOther){
+      peopleEl.value = '-';
+    } else {
+      peopleEl.value = total > 0 ? total : '-';
+    }
+  }
 }
 
 function openScheduleForm(index, dateStr){
   editingScheduleIndex = index;
-  renderSchedule(); // re-render to get fresh modal
+  selectedUserIndices = [];
+  renderSchedule();
   const modal = document.getElementById('schedule-modal');
   modal.style.display = 'flex';
-  selectedUserIndex = null;
 
   if(index !== null && index !== undefined){
-    // Edit mode
     document.getElementById('sf-title').textContent = '予定を編集';
     document.getElementById('sf-submit-btn').textContent = '更新する';
     document.getElementById('sf-delete-btn').style.display = 'block';
     const s = scheduleData[index];
-    const ui = USERS.findIndex(u=>u.label===s.name);
-    selectUser(ui>=0 ? ui : 3);
-    if(ui===3 || ui<0) document.getElementById('sf-custom-name').value = s.name;
+    // 複数ユーザー名をカンマ区切りで保存してある想定
+    const names = s.name.split(',').map(n=>n.trim());
+    names.forEach(name=>{
+      const ui = USERS.findIndex(u=>u.label===name);
+      if(ui>=0 && !selectedUserIndices.includes(ui)) selectedUserIndices.push(ui);
+      else if(ui<0 && !selectedUserIndices.includes(3)) selectedUserIndices.push(3);
+    });
+    // ボタン反映
+    selectedUserIndices.forEach(ui=>selectUser(ui));
+    selectedUserIndices = [...new Set(selectedUserIndices)]; // 重複除去
+    // その他の名前
+    const customNames = names.filter(n=>!USERS.slice(0,3).map(u=>u.label).includes(n));
+    if(customNames.length>0) document.getElementById('sf-custom-name').value = customNames.join(', ');
     document.getElementById('sf-start-date').value = s.startDate;
-    document.getElementById('sf-start-time').value = s.startTime;
+    document.getElementById('sf-start-time').value = s.startTime||'ー';
     document.getElementById('sf-end-date').value = s.endDate;
-    document.getElementById('sf-end-time').value = s.endTime;
-    document.getElementById('sf-people').value = s.people;
+    document.getElementById('sf-end-time').value = s.endTime||'ー';
+    document.getElementById('sf-people').value = s.people!==undefined&&s.people!==''?s.people:'-';
     document.getElementById('sf-memo').value = s.memo||'';
   } else {
-    // Add mode
     document.getElementById('sf-title').textContent = '予定を追加';
     document.getElementById('sf-submit-btn').textContent = '追加する';
     document.getElementById('sf-delete-btn').style.display = 'none';
@@ -1105,6 +1010,9 @@ function openScheduleForm(index, dateStr){
       document.getElementById('sf-start-date').value = dateStr;
       document.getElementById('sf-end-date').value = dateStr;
     }
+    document.getElementById('sf-start-time').value = 'ー';
+    document.getElementById('sf-end-time').value = 'ー';
+    document.getElementById('sf-people').value = '-';
   }
   editingScheduleIndex = index;
 }
@@ -1116,14 +1024,17 @@ function closeScheduleForm(e){
 }
 
 function submitSchedule(){
-  const ui = selectedUserIndex;
-  if(ui===null){ alert('利用者を選択してください'); return; }
-  const name = ui===3 ? (document.getElementById('sf-custom-name').value.trim()||'その他') : USERS[ui].label;
+  if(selectedUserIndices.length===0){ alert('利用者を選択してください'); return; }
+  const hasOther = selectedUserIndices.includes(3);
+  const customName = hasOther ? (document.getElementById('sf-custom-name').value.trim()||'その他') : null;
+  const names = selectedUserIndices.map(ui=>ui===3 ? customName : USERS[ui].label);
+  const name = names.join(', ');
   const startDate = document.getElementById('sf-start-date').value;
   const startTime = document.getElementById('sf-start-time').value;
   const endDate = document.getElementById('sf-end-date').value;
   const endTime = document.getElementById('sf-end-time').value;
-  const people = parseInt(document.getElementById('sf-people').value)||0;
+  const peopleRaw = document.getElementById('sf-people').value;
+  const people = (peopleRaw==='-'||peopleRaw==='') ? '-' : parseInt(peopleRaw)||0;
   const memo = document.getElementById('sf-memo').value.trim();
   if(!startDate||!endDate){ alert('開始日・終了日を入力してください'); return; }
   if(endDate < startDate){ alert('終了日は開始日以降にしてください'); return; }
@@ -1168,12 +1079,22 @@ function renderMiniMonth(yr, mo, todayStr){
     if(dayScheds.length===0){
       html+=`<div onclick="openScheduleForm(null,'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;color:${textCol};cursor:pointer;${isToday?'outline:2px solid #1a1a1a;font-weight:700':''}">${d}</div>`;
     } else if(dayScheds.length===1){
-      const u = USERS.find(u=>u.label===dayScheds[0].name)||USERS[3];
-      const si = scheduleData.indexOf(dayScheds[0]);
-      html+=`<div onclick="openScheduleForm(${si},'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;background:${u.color};color:white;font-weight:600;cursor:pointer;${isToday?'outline:2px solid #1a1a1a':''};">${d}</div>`;
+      // 複数名対応：先頭名の色を使いつつ複数なら分割
+      const names0 = dayScheds[0].name.split(',').map(n=>n.trim());
+      const colors0 = names0.map(n=>(USERS.find(u=>u.label===n)||USERS[3]).color);
+      const si0 = scheduleData.indexOf(dayScheds[0]);
+      const bg0 = colors0.length===1 ? colors0[0] : `linear-gradient(to right,${colors0.map((c,ci)=>`${c} ${ci*100/colors0.length}% ${(ci+1)*100/colors0.length}%`).join(',')})`;
+      html+=`<div onclick="openScheduleForm(${si0},'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;background:${bg0};color:white;font-weight:600;cursor:pointer;${isToday?'outline:2px solid #1a1a1a':''};">${d}</div>`;
     } else {
       // Multiple: split background vertically
-      const colors = dayScheds.map(s=>(USERS.find(u=>u.label===s.name)||USERS[3]).color);
+      // 複数ユーザー名（カンマ区切り）に対応
+      const colors = [];
+      dayScheds.forEach(s=>{
+        s.name.split(',').map(n=>n.trim()).forEach(n=>{
+          const u = USERS.find(u=>u.label===n)||USERS[3];
+          if(!colors.includes(u.color)) colors.push(u.color);
+        });
+      });
       const pct = 100/colors.length;
       const gradient = colors.map((c,ci)=>`${c} ${ci*pct}% ${(ci+1)*pct}%`).join(',');
       html+=`<div onclick="openScheduleForm(${scheduleData.indexOf(dayScheds[0])},'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;background:linear-gradient(to right,${gradient});color:white;font-weight:600;cursor:pointer;${isToday?'outline:2px solid #1a1a1a':''};">${d}</div>`;
