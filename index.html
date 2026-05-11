@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -122,7 +121,6 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
   </div>
 
   <!-- スクロールエリア：チェックリスト本体 -->
-
   <div class="scroll-content">
     <div id="arrive-panel" class="arrive-tab">
       <div id="arrive-sections"></div>
@@ -143,35 +141,32 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
       </div>
     </div>
 
-```
-<!-- 長期不在パネル -->
-<div id="longterm-panel" style="display:none">
-  <div id="longterm-sections"></div>
-  <button class="add-section-btn" onclick="addSection('longterm')">+ セクションを追加</button>
-  <div class="all-done" id="longterm-done">長期不在の準備完了です ☆</div>
-  <div class="bottom-bar">
-    <button class="reset-btn" onclick="resetPanel('longterm')">チェックをリセット</button>
-    <span class="sync-status" id="longterm-sync"></span>
-  </div>
-</div>
+    <!-- 長期不在パネル -->
+    <div id="longterm-panel" style="display:none">
+      <div id="longterm-sections"></div>
+      <button class="add-section-btn" onclick="addSection('longterm')">+ セクションを追加</button>
+      <div class="all-done" id="longterm-done">長期不在の準備完了です ☆</div>
+      <div class="bottom-bar">
+        <button class="reset-btn" onclick="resetPanel('longterm')">チェックをリセット</button>
+        <span class="sync-status" id="longterm-sync"></span>
+      </div>
+    </div>
 
-<!-- 1回きりタスクパネル -->
-<div id="once-panel" style="display:none">
-  <div id="once-sections"></div>
-  <button class="add-section-btn" onclick="addSection('once')">+ セクションを追加</button>
-  <div class="all-done" id="once-done">すべての初期整備が完了しました ☆</div>
-  <div class="bottom-bar">
-    <button class="reset-btn" onclick="resetPanel('once')">チェックをリセット</button>
-    <span class="sync-status" id="once-sync"></span>
-  </div>
-</div>
+    <!-- 1回きりタスクパネル -->
+    <div id="once-panel" style="display:none">
+      <div id="once-sections"></div>
+      <button class="add-section-btn" onclick="addSection('once')">+ セクションを追加</button>
+      <div class="all-done" id="once-done">すべての初期整備が完了しました ☆</div>
+      <div class="bottom-bar">
+        <button class="reset-btn" onclick="resetPanel('once')">チェックをリセット</button>
+        <span class="sync-status" id="once-sync"></span>
+      </div>
+    </div>
 
-<!-- スケジュールパネル -->
-<div id="schedule-panel" style="display:none">
-  <div id="schedule-content"></div>
-</div>
-```
-
+    <!-- スケジュールパネル -->
+    <div id="schedule-panel" style="display:none">
+      <div id="schedule-content"></div>
+    </div>
   </div>
 </div>
 
@@ -614,7 +609,14 @@ function setSync(tab,msg,cls){
 async function loadFromSheet(){
   try{
     const res=await fetch(API_URL);
-    const rows=await res.json();
+    const payload=await res.json();
+
+    // スケジュールデータを復元
+    if(payload.schedule && Array.isArray(payload.schedule)){
+      scheduleData=payload.schedule;
+    }
+
+    const rows=Array.isArray(payload) ? payload : (payload.rows||[]);
     if(!rows||rows.length===0){await saveToSheet();return;}
     const newData={arrive:[],leave:[],longterm:[],once:[]};
     const newChecked={arrive:{},leave:{},longterm:{},once:{}};
@@ -633,7 +635,6 @@ async function loadFromSheet(){
         newChecked[tab][tab+'-'+si+'-'+ii]=true;
       }
     });
-    // longterm/onceがシートに未登録の場合はdefaultDataで補完して保存
     let needsSave=false;
     ['longterm','once'].forEach(tab=>{
       if(newData[tab].length===0){
@@ -658,7 +659,7 @@ async function saveToSheet(){
     });
   });
   try{
-    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveAll',rows}),headers:{'Content-Type':'text/plain'}});
+    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveAll',rows,scheduleData}),headers:{'Content-Type':'text/plain'}});
   }catch(e){}
 }
 
@@ -964,7 +965,7 @@ function renderSchedule(){
 
   // List
   html += `<div style="margin-top:1.25rem">`;
-  const sorted = scheduleData.map((s,i)=>({...s,_i:i})).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const sorted = scheduleData.map((s,i)=>Object.assign({},s,{_i:i})).sort((a,b)=>a.startDate.localeCompare(b.startDate));
   if(sorted.length===0){
     html += `<p style="font-size:13px;color:#aaa;text-align:center;padding:1rem">まだ予定がありません</p>`;
   } else {
@@ -1191,6 +1192,7 @@ function formatDate(dateStr){
 async function saveScheduleToSheet(){
   try{
     await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveSchedule',scheduleData}),headers:{'Content-Type':'text/plain'}});
+    // チェックリストデータも一緒に保存（rows+schedule統合）
   }catch(e){}
 }
 
@@ -1213,6 +1215,5 @@ function updateAllProgress(){
 loadFromSheet();
 startPolling();
 </script>
-
 </body>
 </html>
