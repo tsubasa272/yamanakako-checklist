@@ -668,6 +668,7 @@ async function loadFromSheet(){
     // スケジュールデータを復元
     if(payload.schedule && Array.isArray(payload.schedule)){
       scheduleData=payload.schedule;
+      if(currentTab==='schedule') renderSchedule();
     }
 
     const rows=Array.isArray(payload) ? payload : (payload.rows||[]);
@@ -699,6 +700,7 @@ async function loadFromSheet(){
     data=newData; checked=newChecked;
     if(needsSave) saveToSheet();
     render('arrive'); render('leave'); render('longterm'); render('once');
+    if(currentTab==='schedule') renderSchedule();
   }catch(e){setSync(currentTab,'読み込みエラー','error');}
 }
 
@@ -995,10 +997,10 @@ let inlineCalYear, inlineCalMonth;
 let pickingStart = true; // true=開始日選択中, false=終了日選択中
 let pickedStart = null, pickedEnd = null;
 
-function initInlineCal(startDate, endDate){
+function initInlineCal(startDate, endDate, calYr, calMo){
   const now = new Date();
-  inlineCalYear = now.getFullYear();
-  inlineCalMonth = now.getMonth();
+  inlineCalYear = calYr !== undefined ? calYr : now.getFullYear();
+  inlineCalMonth = calMo !== undefined ? calMo : now.getMonth();
   pickedStart = startDate || null;
   pickedEnd = endDate || null;
   pickingStart = !startDate; // 既に開始日があれば終了日選択から
@@ -1206,7 +1208,7 @@ function selectUser(ui){
   }
 }
 
-function openScheduleForm(index, dateStr){
+function openScheduleForm(index, dateStr, calYr, calMo){
   editingScheduleIndex = index;
   selectedUserIndices = [];
 
@@ -1261,7 +1263,7 @@ function openScheduleForm(index, dateStr){
     document.getElementById('sf-title').textContent = '予定を追加';
     document.getElementById('sf-submit-btn').textContent = '追加する';
     document.getElementById('sf-delete-btn').style.display = 'none';
-    setTimeout(()=>initInlineCal(dateStr||null, null), 50);
+    setTimeout(()=>initInlineCal(dateStr||null, null, calYr, calMo), 50);
     document.getElementById('sf-start-time').value = 'ー';
     document.getElementById('sf-end-time').value = 'ー';
     document.getElementById('sf-people').value = '-';
@@ -1332,14 +1334,14 @@ function renderMiniMonth(yr, mo, todayStr){
     const textCol = dow===0?'#e85050':dow===6?'#5080e8':'#1a1a1a';
 
     if(dayScheds.length===0){
-      html+=`<div onclick="openScheduleForm(null,'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;color:${textCol};cursor:pointer;${isToday?'outline:2px solid #1a1a1a;font-weight:700':''}">${d}</div>`;
+      html+=`<div onclick="openScheduleForm(null,'${dk}',${yr},${mo})" style="font-size:11px;padding:4px 2px;border-radius:5px;color:${textCol};cursor:pointer;${isToday?'outline:2px solid #1a1a1a;font-weight:700':''}">${d}</div>`;
     } else if(dayScheds.length===1){
       // 複数名対応：先頭名の色を使いつつ複数なら分割
       const names0 = dayScheds[0].name.split(',').map(n=>n.trim());
       const colors0 = names0.map(n=>(USERS.find(u=>u.label===n)||USERS[3]).color);
       const si0 = scheduleData.indexOf(dayScheds[0]);
       const bg0 = colors0.length===1 ? colors0[0] : `linear-gradient(to right,${colors0.map((c,ci)=>`${c} ${ci*100/colors0.length}% ${(ci+1)*100/colors0.length}%`).join(',')})`;
-      html+=`<div onclick="openScheduleForm(${si0},'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;background:${bg0};color:white;font-weight:600;cursor:pointer;${isToday?'outline:2px solid #1a1a1a':''};">${d}</div>`;
+      html+=`<div onclick="openScheduleForm(${si0},'${dk}',${yr},${mo})" style="font-size:11px;padding:4px 2px;border-radius:5px;background:${bg0};color:white;font-weight:600;cursor:pointer;${isToday?'outline:2px solid #1a1a1a':''};">${d}</div>`;
     } else {
       // Multiple: split background vertically
       // 複数ユーザー名（カンマ区切り）に対応
@@ -1352,7 +1354,7 @@ function renderMiniMonth(yr, mo, todayStr){
       });
       const pct = 100/colors.length;
       const gradient = colors.map((c,ci)=>`${c} ${ci*pct}% ${(ci+1)*pct}%`).join(',');
-      html+=`<div onclick="openScheduleForm(${scheduleData.indexOf(dayScheds[0])},'${dk}')" style="font-size:11px;padding:4px 2px;border-radius:5px;background:linear-gradient(to right,${gradient});color:white;font-weight:600;cursor:pointer;${isToday?'outline:2px solid #1a1a1a':''};">${d}</div>`;
+      html+=`<div onclick="openScheduleForm(${scheduleData.indexOf(dayScheds[0])},'${dk}',${yr},${mo})" style="font-size:11px;padding:4px 2px;border-radius:5px;background:linear-gradient(to right,${gradient});color:white;font-weight:600;cursor:pointer;${isToday?'outline:2px solid #1a1a1a':''};">${d}</div>`;
     }
   }
   html+=`</div></div>`;
