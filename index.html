@@ -170,6 +170,60 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
   </div>
 </div>
 
+<!-- スケジュールモーダル（固定・renderScheduleに依存しない） -->
+<div id="schedule-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:flex-end;justify-content:center" onclick="closeScheduleForm(event)">
+  <div style="background:#f5f5f3;border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span id="sf-title" style="font-size:15px;font-weight:500">予定を追加</span>
+      <button onclick="closeScheduleForm()" style="font-size:20px;color:#aaa;background:none;border:none;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">利用者（複数選択可）</div>
+        <div id="sf-user-btns" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+      </div>
+      <div id="sf-custom-wrap" style="display:none">
+        <div style="font-size:11px;color:#888;margin-bottom:4px">名前（自由入力）</div>
+        <input id="sf-custom-name" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：田中さん一家">
+      </div>
+      <div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px" id="sf-date-hint">開始日をタップしてください</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px;background:white;border:0.5px solid #ccc;border-radius:8px;padding:8px 12px">
+            <div style="font-size:10px;color:#888">開始日</div>
+            <div id="sf-start-display" style="font-size:14px;color:#ccc;font-weight:500;margin-top:2px">未選択</div>
+          </div>
+          <div style="flex:1;min-width:120px;background:white;border:0.5px solid #ccc;border-radius:8px;padding:8px 12px">
+            <div style="font-size:10px;color:#888">終了日</div>
+            <div id="sf-end-display" style="font-size:14px;color:#ccc;font-weight:500;margin-top:2px">未選択</div>
+          </div>
+        </div>
+        <input type="hidden" id="sf-start-date">
+        <input type="hidden" id="sf-end-date">
+        <div id="sf-inline-cal" style="background:white;border-radius:12px;border:0.5px solid #e8e8e6;padding:12px;user-select:none;-webkit-user-select:none"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><div style="font-size:11px;color:#888;margin-bottom:4px">開始の時間帯</div>
+          <select id="sf-start-time" style="width:100%;padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none"></select>
+        </div>
+        <div style="flex:1"><div style="font-size:11px;color:#888;margin-bottom:4px">終了の時間帯</div>
+          <select id="sf-end-time" style="width:100%;padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none"></select>
+        </div>
+      </div>
+      <div><div style="font-size:11px;color:#888;margin-bottom:4px">人数</div>
+        <select id="sf-people" style="padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none"></select>
+      </div>
+      <div><div style="font-size:11px;color:#888;margin-bottom:4px">メモ（任意）</div>
+        <input id="sf-memo" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：子供2名含む">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="submitSchedule()" style="flex:1;padding:12px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer" id="sf-submit-btn">追加する</button>
+      </div>
+      <button id="sf-delete-btn" onclick="deleteScheduleEditing()" style="display:none;width:100%;padding:12px;background:white;color:#cc4040;border:1px solid #cc4040;border-radius:8px;font-size:14px;cursor:pointer">この予定を削除</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbyjGEvoRmbFW6-0HTO1yckbvbl9uD1uF0Y5B7wozzGBp94ZH2EYnirRc0Je3NZEVq8E/exec';
 
@@ -693,6 +747,8 @@ function switchTab(tab){
     if(panel) panel.style.display=t===tab?'block':'none';
   });
   if(tab==='schedule') renderSchedule();
+  // タブ状態をURLハッシュに保存
+  try{ history.replaceState(null,null,'#'+tab); }catch(e){}
 }
 
 function toggleEdit(){
@@ -934,6 +990,126 @@ const USERS = [
 let editingScheduleIndex = null;
 let selectedUserIndices = [];
 
+// ---- インラインカレンダー ----
+let inlineCalYear, inlineCalMonth;
+let pickingStart = true; // true=開始日選択中, false=終了日選択中
+let pickedStart = null, pickedEnd = null;
+
+function initInlineCal(startDate, endDate){
+  const now = new Date();
+  inlineCalYear = now.getFullYear();
+  inlineCalMonth = now.getMonth();
+  pickedStart = startDate || null;
+  pickedEnd = endDate || null;
+  pickingStart = !startDate; // 既に開始日があれば終了日選択から
+  renderInlineCal();
+}
+
+function renderInlineCal(){
+  const el = document.getElementById('sf-inline-cal');
+  if(!el) return;
+  const yr = inlineCalYear, mo = inlineCalMonth;
+  const daysInMonth = new Date(yr, mo+1, 0).getDate();
+  const firstDay = new Date(yr, mo, 1).getDay();
+  const todayStr = new Date().toISOString().slice(0,10);
+  const dayNames = ['日','月','火','水','木','金','土'];
+
+  // ヒント更新
+  const hint = document.getElementById('sf-date-hint');
+  if(hint){
+    if(!pickedStart) hint.textContent = '開始日をタップしてください';
+    else if(!pickedEnd) hint.textContent = '終了日をタップしてください';
+    else hint.textContent = '日付を変更する場合は再度タップ';
+  }
+  // 表示欄更新
+  const sd = document.getElementById('sf-start-display');
+  const ed = document.getElementById('sf-end-display');
+  if(sd) sd.textContent = pickedStart ? formatDateJP(pickedStart) : '未選択';
+  if(ed) ed.textContent = pickedEnd ? formatDateJP(pickedEnd) : '未選択';
+  if(sd) sd.style.color = pickedStart ? '#1a1a1a' : '#ccc';
+  if(ed) ed.style.color = pickedEnd ? '#1a1a1a' : '#ccc';
+  // hidden input更新
+  const shi = document.getElementById('sf-start-date');
+  const ehi = document.getElementById('sf-end-date');
+  if(shi) shi.value = pickedStart||'';
+  if(ehi) ehi.value = pickedEnd||'';
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <button onclick="inlineCalPrev()" style="border:none;background:none;font-size:18px;cursor:pointer;color:#666;padding:4px 8px">‹</button>
+    <span style="font-size:13px;font-weight:500">${yr}年 ${mo+1}月</span>
+    <button onclick="inlineCalNext()" style="border:none;background:none;font-size:18px;cursor:pointer;color:#666;padding:4px 8px">›</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">`;
+
+  dayNames.forEach((d,i)=>{
+    html+=`<div style="font-size:10px;color:${i===0?'#e85050':i===6?'#5080e8':'#aaa'};padding:3px 0">${d}</div>`;
+  });
+
+  for(let i=0;i<firstDay;i++) html+=`<div></div>`;
+
+  for(let d=1;d<=daysInMonth;d++){
+    const dk = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dow = (firstDay+d-1)%7;
+    const isToday = dk===todayStr;
+    const isStart = dk===pickedStart;
+    const isEnd = dk===pickedEnd;
+    const inRange = pickedStart && pickedEnd && dk>pickedStart && dk<pickedEnd;
+    const textCol = dow===0?'#e85050':dow===6?'#5080e8':'#1a1a1a';
+
+    let bg='transparent', fg=textCol, fw='400', br='6px', outline='none';
+    if(isStart||isEnd){ bg='#1a1a1a'; fg='white'; fw='700'; }
+    else if(inRange){ bg='#e8e8e6'; }
+    if(isToday && !isStart && !isEnd){ outline='2px solid #aaa'; }
+
+    // 範囲の端を丸くする
+    let extraStyle='';
+    if(isStart && pickedEnd) extraStyle='border-radius:6px 0 0 6px;';
+    else if(isEnd && pickedStart) extraStyle='border-radius:0 6px 6px 0;';
+    else if(inRange) extraStyle='border-radius:0;';
+
+    html+=`<div onclick="inlineCalPick('${dk}')" style="font-size:12px;padding:6px 2px;border-radius:${br};background:${bg};color:${fg};font-weight:${fw};cursor:pointer;outline:${outline};${extraStyle}">${d}</div>`;
+  }
+  html+=`</div>`;
+  el.innerHTML = html;
+}
+
+function inlineCalPrev(){
+  inlineCalMonth--;
+  if(inlineCalMonth<0){ inlineCalMonth=11; inlineCalYear--; }
+  renderInlineCal();
+}
+function inlineCalNext(){
+  inlineCalMonth++;
+  if(inlineCalMonth>11){ inlineCalMonth=0; inlineCalYear++; }
+  renderInlineCal();
+}
+
+function inlineCalPick(dk){
+  if(!pickedStart || (pickedStart && pickedEnd)){
+    // 最初のタップ or リセット → 開始日
+    pickedStart = dk;
+    pickedEnd = null;
+    pickingStart = false;
+  } else {
+    // 2回目のタップ → 終了日
+    if(dk < pickedStart){
+      // 開始日より前なら入れ替え
+      pickedEnd = pickedStart;
+      pickedStart = dk;
+    } else {
+      pickedEnd = dk;
+    }
+    pickingStart = true;
+  }
+  renderInlineCal();
+}
+
+function formatDateJP(dateStr){
+  if(!dateStr) return '未選択';
+  const [y,m,d] = dateStr.split('-');
+  return `${parseInt(m)}月${parseInt(d)}日`;
+}
+
 function getDaySchedules(yr, mo, d){
   const dateStr = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   return scheduleData.filter(s => s.startDate <= dateStr && s.endDate >= dateStr);
@@ -990,58 +1166,6 @@ function renderSchedule(){
   }
   html += `</div>`;
 
-  html += `<div id="schedule-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:flex-end;justify-content:center" onclick="closeScheduleForm(event)">
-    <div style="background:#f5f5f3;border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <span id="sf-title" style="font-size:15px;font-weight:500">予定を追加</span>
-        <button onclick="closeScheduleForm()" style="font-size:20px;color:#aaa;background:none;border:none;cursor:pointer;line-height:1">✕</button>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <div>
-          <div style="font-size:11px;color:#888;margin-bottom:6px">利用者（複数選択可）</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="sf-user-btns">
-            ${USERS.map((u,ui)=>`<button onclick="selectUser(${ui})" id="sf-user-${ui}" style="padding:10px 8px;border:1.5px solid #e0e0e0;border-radius:8px;background:white;font-size:13px;cursor:pointer;text-align:left;color:#666">
-              <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${u.color};margin-right:6px;vertical-align:middle"></span>${u.label}
-            </button>`).join('')}
-          </div>
-        </div>
-        <div id="sf-custom-wrap" style="display:none">
-          <div style="font-size:11px;color:#888;margin-bottom:4px">名前（自由入力）</div>
-          <input id="sf-custom-name" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：田中さん一家">
-        </div>
-        <div style="display:flex;gap:8px">
-          <div style="flex:1"><div style="font-size:11px;color:#888;margin-bottom:4px">開始日</div>
-            <input id="sf-start-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
-          </div>
-          <div><div style="font-size:11px;color:#888;margin-bottom:4px">時間帯</div>
-            <select id="sf-start-time" style="padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <div style="flex:1"><div style="font-size:11px;color:#888;margin-bottom:4px">終了日</div>
-            <input id="sf-end-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
-          </div>
-          <div><div style="font-size:11px;color:#888;margin-bottom:4px">時間帯</div>
-            <select id="sf-end-time" style="padding:10px 6px;border:0.5px solid #ccc;border-radius:8px;font-size:13px;outline:none">${TIME_LABELS.map(t=>`<option>${t}</option>`).join('')}</select>
-          </div>
-        </div>
-        <div><div style="font-size:11px;color:#888;margin-bottom:4px">人数</div>
-          <select id="sf-people" style="padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
-            <option value="-">ー</option>
-            ${Array.from({length:20},(_,i)=>`<option value="${i+1}">${i+1}名</option>`).join('')}
-          </select>
-        </div>
-        <div><div style="font-size:11px;color:#888;margin-bottom:4px">メモ（任意）</div>
-          <input id="sf-memo" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：子供2名含む">
-        </div>
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button onclick="submitSchedule()" style="flex:1;padding:12px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer" id="sf-submit-btn">追加する</button>
-        </div>
-        <button id="sf-delete-btn" onclick="deleteScheduleEditing()" style="display:none;width:100%;padding:12px;background:white;color:#cc4040;border:1px solid #cc4040;border-radius:8px;font-size:14px;cursor:pointer">この予定を削除</button>
-      </div>
-    </div>
-  </div>`;
-
   el.innerHTML = html;
 }
 
@@ -1085,7 +1209,28 @@ function selectUser(ui){
 function openScheduleForm(index, dateStr){
   editingScheduleIndex = index;
   selectedUserIndices = [];
-  renderSchedule();
+
+  // ユーザーボタンを動的生成
+  const userBtns = document.getElementById('sf-user-btns');
+  if(userBtns){
+    userBtns.innerHTML = USERS.map((u,ui)=>`<button onclick="selectUser(${ui})" id="sf-user-${ui}" style="padding:10px 8px;border:1.5px solid #e0e0e0;border-radius:8px;background:white;font-size:13px;cursor:pointer;text-align:left;color:#666">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${u.color};margin-right:6px;vertical-align:middle"></span>${u.label}
+    </button>`).join('');
+  }
+  // 時間帯セレクトを動的生成
+  ['sf-start-time','sf-end-time'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.innerHTML = TIME_LABELS.map(t=>`<option>${t}</option>`).join('');
+  });
+  // 人数セレクトを動的生成
+  const peopleEl = document.getElementById('sf-people');
+  if(peopleEl) peopleEl.innerHTML = `<option value="-">ー</option>${Array.from({length:20},(_,i)=>`<option value="${i+1}">${i+1}名</option>`).join('')}`;
+
+  // カスタム名・フォームリセット
+  document.getElementById('sf-custom-wrap').style.display='none';
+  document.getElementById('sf-custom-name').value='';
+  document.getElementById('sf-memo').value='';
+
   const modal = document.getElementById('schedule-modal');
   modal.style.display = 'flex';
 
@@ -1107,9 +1252,8 @@ function openScheduleForm(index, dateStr){
     // その他の名前
     const customNames = names.filter(n=>!USERS.slice(0,3).map(u=>u.label).includes(n));
     if(customNames.length>0) document.getElementById('sf-custom-name').value = customNames.join(', ');
-    document.getElementById('sf-start-date').value = s.startDate;
+    setTimeout(()=>initInlineCal(s.startDate, s.endDate), 50);
     document.getElementById('sf-start-time').value = s.startTime||'ー';
-    document.getElementById('sf-end-date').value = s.endDate;
     document.getElementById('sf-end-time').value = s.endTime||'ー';
     document.getElementById('sf-people').value = s.people!==undefined&&s.people!==''?s.people:'-';
     document.getElementById('sf-memo').value = s.memo||'';
@@ -1117,10 +1261,7 @@ function openScheduleForm(index, dateStr){
     document.getElementById('sf-title').textContent = '予定を追加';
     document.getElementById('sf-submit-btn').textContent = '追加する';
     document.getElementById('sf-delete-btn').style.display = 'none';
-    if(dateStr){
-      document.getElementById('sf-start-date').value = dateStr;
-      document.getElementById('sf-end-date').value = dateStr;
-    }
+    setTimeout(()=>initInlineCal(dateStr||null, null), 50);
     document.getElementById('sf-start-time').value = 'ー';
     document.getElementById('sf-end-time').value = 'ー';
     document.getElementById('sf-people').value = '-';
@@ -1132,6 +1273,7 @@ function closeScheduleForm(e){
   if(e && e.target !== document.getElementById('schedule-modal')) return;
   const modal = document.getElementById('schedule-modal');
   if(modal) modal.style.display = 'none';
+  renderSchedule();
 }
 
 function submitSchedule(){
@@ -1147,7 +1289,7 @@ function submitSchedule(){
   const peopleRaw = document.getElementById('sf-people').value;
   const people = (peopleRaw==='-'||peopleRaw==='') ? '-' : parseInt(peopleRaw)||0;
   const memo = document.getElementById('sf-memo').value.trim();
-  if(!startDate||!endDate){ alert('開始日・終了日を入力してください'); return; }
+  if(!startDate||!endDate){ alert('開始日と終了日を選択してください'); return; }
   if(endDate < startDate){ alert('終了日は開始日以降にしてください'); return; }
   const entry = {name,startDate,startTime,endDate,endTime,people,memo};
   if(editingScheduleIndex !== null && editingScheduleIndex !== undefined){
@@ -1156,6 +1298,7 @@ function submitSchedule(){
     scheduleData.push(entry);
   }
   saveScheduleToSheet();
+  document.getElementById('schedule-modal').style.display='none';
   renderSchedule();
 }
 
@@ -1164,6 +1307,7 @@ function deleteScheduleEditing(){
   if(!confirm('この予定を削除しますか？')) return;
   scheduleData.splice(editingScheduleIndex,1);
   saveScheduleToSheet();
+  document.getElementById('schedule-modal').style.display='none';
   renderSchedule();
 }
 
@@ -1246,6 +1390,10 @@ function updateAllProgress(){
 
 loadFromSheet();
 startPolling();
+// ハッシュからタブを復元
+const validTabs=['arrive','leave','longterm','once','schedule'];
+const hashTab=location.hash.replace('#','');
+if(validTabs.includes(hashTab)) switchTab(hashTab);
 </script>
 </body>
 </html>
