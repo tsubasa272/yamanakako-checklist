@@ -267,6 +267,34 @@ const defaultData = {
       { text: 'チェックリスト関連整備', note: '' },
       { text: '別荘ノート作成', note: '' },
     ]},
+    { title: '管理人不要計画：購入', items: [
+      { text: 'SwitchBot ハブ2を購入する', note: '温湿度センサー内蔵。スマホからの遠隔監視の中核。Wi-Fi経由でどこからでも室内の温湿度を確認できる。赤外線家電（エアコン等）のスマホ遠隔操作も同時に実現できる。' },
+      { text: 'SwitchBot 温湿度計プラスを2個購入する', note: '押し入れや収納など空気が滞留しやすい場所用。アラート基準は湿度70%超で通知設定する。' },
+      { text: '三菱電機 MJ-P180YX（除湿機）を購入する', note: '連続排水対応・停電復帰機能あり・冬モードあり。冬季（11月〜3月）は水抜き後に停止・電源抜きで保管する。' },
+      { text: '連続排水用ホース（三洋化成 グラアスホース 3m）を購入する', note: 'MJ-P180YXに接続してタンクに水が溜まらないようにする。浴室やシンクへの排水に使用。506円程度。' },
+      { text: 'サーキュレーターを購入する', note: '除湿機1台で39畳をカバーするため空気循環を補助する目的。SwitchBotプラグと組み合わせてスケジュール運転も可。' },
+      { text: 'ロボット掃除機を購入する', note: '2択：Eufy Auto-Empty C10（吸引専用・3万円以下）またはEufy X10 Pro Omni（吸引＋モップ・約10万円）。購入時に判断する。' },
+      { text: 'SwitchBot スマートロック Pro ＋ キーパッドを購入する', note: 'クリーニング業者に暗証番号を一時発行・削除できる。購入前に鍵の修理・サムターン形状確認を先に済ませること。' },
+      { text: 'Olide スマート窓自動開閉システムを購入する（引き違い窓1箇所・試験導入）', note: '購入前に対象窓の幅・窓枠上部の素材・近くにコンセントがあるかを現地確認すること。取り付けには電動ドライバー必要。' },
+    ]},
+    { title: '管理人不要計画：設置・工事', items: [
+      { text: '別荘にWi-Fi環境を整える', note: 'SwitchBotのリモート監視・ロボット掃除機の遠隔操作に必須。ない場合はモバイルルーターまたは据え置き型SIMルーターを検討。' },
+      { text: 'SwitchBot ハブ2を設置・アプリ設定する', note: 'リビング中央付近に設置。アラート基準は湿度70%超で通知。' },
+      { text: 'SwitchBot 温湿度計プラスを押し入れ・収納に設置する', note: 'ハブ2と連携させてアプリ上で確認できるようにする。各センサーに場所名をラベル設定しておくと管理しやすい。' },
+      { text: '除湿機（MJ-P180YX）を設置・連続排水の配管をする', note: 'リビング中央に設置。ホースを浴室または使っていないシンクへ引き込んで固定する。設置後に試運転して排水が正常に流れるか確認すること。' },
+      { text: 'サーキュレーターを設置する', note: '除湿機から離れた位置に置き、部屋全体に空気が回るよう向きを調整する。' },
+      { text: 'Olideの窓自動開閉システムを取り付ける', note: '現地で窓枠の素材・幅・コンセント位置を確認してから作業開始。取り付け後にアプリ（TuyaSmart）から開閉動作を確認する。' },
+      { text: 'SwitchBot スマートロック Proを取り付け・設定する', note: '玄関サムターンに両面テープで貼り付けるだけ。クリーニング業者用の暗証番号を発行・管理する設定まで完了させること。' },
+    ]},
+    { title: '管理人不要計画：手続き・依頼', items: [
+      { text: '玄関の鍵の修理・点検を鍵屋に依頼する', note: 'スマートロック取り付けより先に実施すること。費用相場は軽作業修理で約8,800円〜、シリンダー交換で1万〜3.5万円程度。' },
+      { text: '玄関サムターンの形状をSwitchBot対応リストで確認する', note: '形状が特殊な場合は別途アダプターが必要になるか取り付け不可の可能性あり。鍵修理・点検のタイミングで併せて確認すると効率的。' },
+      { text: '冬季の水抜きを業者に依頼する（毎年11月）', note: 'マイナス4度以下で水道管が凍結・破裂するリスクあり。水抜き＋春の水出し（復旧）をセットで依頼。相場は3〜5万円程度。' },
+      { text: '山中湖エリアのクリーニング業者に見積もりを依頼する', note: 'まずYamanashi Villa Clean Service（yamanashi-villa-cleanservice.com）に問い合わせ。月1.5万円の予算感で定期清掃が可能か確認する。' },
+    ]},
+    { title: '管理人不要計画：確認・判断', items: [
+      { text: '除湿機稼働開始後、各部屋の湿度をSwitchBotで実測する', note: '1台で39畳をカバーできているか確認するため。梅雨（6月）の初回シーズンが最初の判断タイミング。' },
+    ]},
   ],
   arrive: [
     { title: '電気・ガス・水道', items: [
@@ -1319,8 +1347,23 @@ function renderMiniMonth(yr, mo, todayStr){
   const dayNames = ['日','月','火','水','木','金','土'];
   const dateKey = (d) => `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
+  const ventilation = {
+    0: null, 1: null, 2: null,
+    3: { label: '月1回推奨', color: '#1D9E75' },
+    4: { label: '月1回推奨', color: '#1D9E75' },
+    5: { label: '月2回推奨', color: '#e07030' },
+    6: { label: '月1回推奨', color: '#1D9E75' },
+    7: { label: '月1回推奨', color: '#1D9E75' },
+    8: { label: '2ヶ月に1回', color: '#5080e8' },
+    9: { label: '2ヶ月に1回', color: '#5080e8' },
+    10: { label: '水抜き', color: '#e85050' },
+    11: { label: '水抜き', color: '#e85050' },
+  };
+  const vent = ventilation[mo];
+  const ventBadge = vent ? `<span style="font-size:10px;font-weight:500;color:white;background:${vent.color};padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:middle">${vent.label}</span>` : '';
+
   let html = `<div style="background:white;border-radius:12px;padding:14px;margin-bottom:10px;border:0.5px solid #e8e8e6">
-    <div style="font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:10px">${yr}年 ${MONTHS[mo]}</div>
+    <div style="font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:10px">${yr}年 ${MONTHS[mo]}${ventBadge}</div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center">`;
   dayNames.forEach((d,i)=>{
     html+=`<div style="font-size:10px;color:${i===0?'#e85050':i===6?'#5080e8':'#aaa'};padding:2px 0">${d}</div>`;
