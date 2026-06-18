@@ -90,6 +90,7 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
         <button class="tab" onclick="switchTab('longterm')">長期不在</button>
         <button class="tab" onclick="switchTab('once')">1回きり</button>
         <button class="tab" onclick="switchTab('schedule')">スケジュール</button>
+        <button class="tab" onclick="switchTab('expense')">費用</button>
       </div>
       <button class="edit-toggle" id="editToggle" onclick="toggleEdit()">編集</button>
     </div>
@@ -117,6 +118,9 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
     </div>
     <div id="schedule-top" style="display:none">
       <p class="progress-label" style="color:#888;font-size:12px">利用スケジュール</p>
+    </div>
+    <div id="expense-top" style="display:none">
+      <p class="progress-label" style="color:#888;font-size:12px">費用記録</p>
     </div>
   </div>
 
@@ -166,6 +170,11 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
     <!-- スケジュールパネル -->
     <div id="schedule-panel" style="display:none">
       <div id="schedule-content"></div>
+    </div>
+
+    <!-- 費用パネル -->
+    <div id="expense-panel" style="display:none">
+      <div id="expense-content"></div>
     </div>
   </div>
 </div>
@@ -224,7 +233,60 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
   </div>
 </div>
 
+<!-- 費用モーダル -->
+<div id="expense-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:flex-end;justify-content:center" onclick="closeExpenseForm(event)">
+  <div style="background:#f5f5f3;border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span id="ef-title" style="font-size:15px;font-weight:500">費用を追加</span>
+      <button onclick="closeExpenseForm()" style="font-size:20px;color:#aaa;background:none;border:none;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><div style="font-size:11px;color:#888;margin-bottom:4px">日付</div>
+        <input id="ef-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
+      </div>
+      <div><div style="font-size:11px;color:#888;margin-bottom:4px">項目名</div>
+        <input id="ef-name" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：除湿機購入">
+      </div>
+      <div><div style="font-size:11px;color:#888;margin-bottom:4px">支払い先</div>
+        <input id="ef-payee" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：ヨドバシカメラ">
+      </div>
+      <div><div style="font-size:11px;color:#888;margin-bottom:4px">費用（円）</div>
+        <input id="ef-amount" type="number" min="0" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：15000">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="submitExpense()" style="flex:1;padding:12px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer" id="ef-submit-btn">追加する</button>
+      </div>
+      <button id="ef-delete-btn" onclick="deleteExpenseEditing()" style="display:none;width:100%;padding:12px;background:white;color:#cc4040;border:1px solid #cc4040;border-radius:8px;font-size:14px;cursor:pointer">この記録を削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- カスタムダイアログ -->
+<div id="custom-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:2000;justify-content:center;align-items:center">
+  <div style="background:white;border-radius:16px;padding:24px 20px;width:90%;max-width:340px;text-align:center">
+    <p id="cd-message" style="font-size:14px;color:#1a1a1a;margin-bottom:20px;line-height:1.6"></p>
+    <div id="cd-buttons" style="display:flex;gap:8px"></div>
+  </div>
+</div>
+
 <script>
+// カスタム alert / confirm
+function customAlert(msg){
+  var d=document.getElementById('custom-dialog');
+  document.getElementById('cd-message').textContent=msg;
+  document.getElementById('cd-buttons').innerHTML='<button onclick="closeDialog()" style="flex:1;padding:12px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer">OK</button>';
+  d.style.display='flex';
+}
+var _confirmCallback=null;
+function customConfirm(msg,cb){
+  _confirmCallback=cb;
+  var d=document.getElementById('custom-dialog');
+  document.getElementById('cd-message').textContent=msg;
+  document.getElementById('cd-buttons').innerHTML='<button onclick="closeDialog()" style="flex:1;padding:12px;background:white;color:#666;border:0.5px solid #ccc;border-radius:8px;font-size:14px;cursor:pointer">キャンセル</button><button onclick="closeDialog();if(_confirmCallback)_confirmCallback()" style="flex:1;padding:12px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer">OK</button>';
+  d.style.display='flex';
+}
+function closeDialog(){document.getElementById('custom-dialog').style.display='none';}
+
 const API_URL = 'https://script.google.com/macros/s/AKfycbyjGEvoRmbFW6-0HTO1yckbvbl9uD1uF0Y5B7wozzGBp94ZH2EYnirRc0Je3NZEVq8E/exec';
 
 const defaultData = {
@@ -360,6 +422,7 @@ const defaultData = {
 let data = JSON.parse(JSON.stringify(defaultData));
 let checked = { arrive: {}, leave: {}, longterm: {}, once: {} };
 let scheduleData = [];
+let expenseData = [];
 let isEditing = false;
 let currentTab = 'arrive';
 let dragSrc = null;
@@ -700,6 +763,19 @@ async function loadFromSheet(){
       if(currentTab==='schedule') renderSchedule();
     }
 
+    // 費用データを復元
+    if(payload.expense && Array.isArray(payload.expense)){
+      expenseData=payload.expense.map(e=>({
+        date: e.date||'',
+        name: e.name||'',
+        payee: e.payee||'',
+        amount: Number(e.amount)||0,
+        billed: e.billed===true||e.billed==='TRUE'||e.billed==='true',
+        billedDate: e.billedDate||''
+      }));
+      if(currentTab==='expense') renderExpense();
+    }
+
     const rows=Array.isArray(payload) ? payload : (payload.rows||[]);
     if(!rows||rows.length===0){await saveToSheet();return;}
     const newData={arrive:[],leave:[],longterm:[],once:[]};
@@ -744,7 +820,7 @@ async function saveToSheet(){
     });
   });
   try{
-    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveAll',rows,scheduleData}),headers:{'Content-Type':'text/plain'}});
+    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveAll',rows,scheduleData,expenseData}),headers:{'Content-Type':'text/plain'}});
   }catch(e){}
 }
 
@@ -767,7 +843,7 @@ function startPolling(){
 
 function switchTab(tab){
   currentTab=tab;
-  const tabs=['arrive','leave','longterm','once','schedule'];
+  const tabs=['arrive','leave','longterm','once','schedule','expense'];
   document.querySelectorAll('.tab').forEach((t,i)=>{
     t.classList.toggle('active',tabs[i]===tab);
   });
@@ -778,6 +854,7 @@ function switchTab(tab){
     if(panel) panel.style.display=t===tab?'block':'none';
   });
   if(tab==='schedule') renderSchedule();
+  if(tab==='expense') renderExpense();
   // タブ状態をURLハッシュに保存
   try{ history.replaceState(null,null,'#'+tab); }catch(e){}
 }
@@ -907,9 +984,10 @@ function addSection(tab){
 }
 
 function resetPanel(tab){
-  if(!confirm('チェックをすべてリセットしますか？'))return;
-  checked[tab]={};
-  saveToSheet(); render(tab);
+  customConfirm('チェックをすべてリセットしますか？',function(){
+    checked[tab]={};
+    saveToSheet(); render(tab);
+  });
 }
 
 // --- Touch/Mouse drag for reordering ---
@@ -1308,7 +1386,7 @@ function closeScheduleForm(e){
 }
 
 function submitSchedule(){
-  if(selectedUserIndices.length===0){ alert('利用者を選択してください'); return; }
+  if(selectedUserIndices.length===0){ customAlert('利用者を選択してください'); return; }
   const hasOther = selectedUserIndices.includes(3);
   const customName = hasOther ? (document.getElementById('sf-custom-name').value.trim()||'その他') : null;
   const names = selectedUserIndices.map(ui=>ui===3 ? customName : USERS[ui].label);
@@ -1320,8 +1398,8 @@ function submitSchedule(){
   const peopleRaw = document.getElementById('sf-people').value;
   const people = (peopleRaw==='-'||peopleRaw==='') ? '-' : parseInt(peopleRaw)||0;
   const memo = document.getElementById('sf-memo').value.trim();
-  if(!startDate||!endDate){ alert('開始日と終了日を選択してください'); return; }
-  if(endDate < startDate){ alert('終了日は開始日以降にしてください'); return; }
+  if(!startDate||!endDate){ customAlert('開始日と終了日を選択してください'); return; }
+  if(endDate < startDate){ customAlert('終了日は開始日以降にしてください'); return; }
   const entry = {name,startDate,startTime,endDate,endTime,people,memo};
   if(editingScheduleIndex !== null && editingScheduleIndex !== undefined){
     scheduleData[editingScheduleIndex] = entry;
@@ -1335,11 +1413,12 @@ function submitSchedule(){
 
 function deleteScheduleEditing(){
   if(editingScheduleIndex===null) return;
-  if(!confirm('この予定を削除しますか？')) return;
-  scheduleData.splice(editingScheduleIndex,1);
-  saveScheduleToSheet();
-  document.getElementById('schedule-modal').style.display='none';
-  renderSchedule();
+  customConfirm('この予定を削除しますか？',function(){
+    scheduleData.splice(editingScheduleIndex,1);
+    saveScheduleToSheet();
+    document.getElementById('schedule-modal').style.display='none';
+    renderSchedule();
+  });
 }
 
 function renderMiniMonth(yr, mo, todayStr){
@@ -1350,15 +1429,14 @@ function renderMiniMonth(yr, mo, todayStr){
 
   const ventilation = {
     0: null, 1: null, 2: null,
-    3: { label: '月1回推奨', color: '#1D9E75' },
-    4: { label: '月1回推奨', color: '#1D9E75' },
-    5: { label: '月2回推奨', color: '#e07030' },
-    6: { label: '月1回推奨', color: '#1D9E75' },
-    7: { label: '月1回推奨', color: '#1D9E75' },
-    8: { label: '2ヶ月に1回', color: '#5080e8' },
-    9: { label: '2ヶ月に1回', color: '#5080e8' },
-    10: { label: '水抜き', color: '#e85050' },
-    11: { label: '水抜き', color: '#e85050' },
+    3: { label: '換気：月1回以上', color: '#1D9E75' },
+    4: { label: '換気：月1回以上', color: '#1D9E75' },
+    5: { label: '換気：月2回以上', color: '#e07030' },
+    6: { label: '換気：月1回以上', color: '#1D9E75' },
+    7: { label: '換気：月1回以上', color: '#1D9E75' },
+    8: { label: '換気：2ヶ月に1回', color: '#5080e8' },
+    9: { label: '換気：2ヶ月に1回', color: '#5080e8' },
+    10: null, 11: null,
   };
   const vent = ventilation[mo];
   const ventBadge = vent ? `<span style="font-size:10px;font-weight:500;color:white;background:${vent.color};padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:middle">${vent.label}</span>` : '';
@@ -1418,6 +1496,173 @@ async function saveScheduleToSheet(){
   }catch(e){}
 }
 
+// ---- 費用記録 ----
+let editingExpenseIndex = null;
+
+function formatYen(n){
+  return Number(n||0).toLocaleString('ja-JP');
+}
+
+function renderExpense(){
+  const el = document.getElementById('expense-content');
+  if(!el) return;
+
+  const unbilled = expenseData.filter(e=>!e.billed);
+  const billed = expenseData.filter(e=>e.billed);
+  const unbilledTotal = unbilled.reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+
+  let html = `<div style="background:white;border-radius:12px;padding:16px;margin-bottom:1rem;border:0.5px solid #e8e8e6">
+    <div style="font-size:12px;color:#888;margin-bottom:4px">未請求の合計</div>
+    <div style="font-size:24px;font-weight:600;color:#1a1a1a">¥${formatYen(unbilledTotal)}</div>
+  </div>`;
+
+  const disabledAttr = unbilled.length===0 ? 'disabled' : '';
+  const disabledStyle = unbilled.length===0 ? 'opacity:0.4;' : '';
+  html += `<div style="display:flex;gap:8px;margin-bottom:1rem">
+    <button onclick="openExpenseForm(null)" style="flex:1;padding:10px;font-size:13px;border:0.5px solid #ccc;border-radius:8px;background:white;cursor:pointer">＋ 費用を追加</button>
+    <button onclick="markAllBilled()" ${disabledAttr} style="flex:1;padding:10px;font-size:13px;border:none;border-radius:8px;background:#1a1a1a;color:white;cursor:pointer;${disabledStyle}">一括請求済みにする</button>
+  </div>`;
+
+  // 未請求リスト
+  html += `<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;padding-left:4px">未請求</div>`;
+  if(unbilled.length===0){
+    html += `<p style="font-size:13px;color:#aaa;text-align:center;padding:1rem">未請求の費用はありません</p>`;
+  } else {
+    unbilled.sort((a,b)=>b.date.localeCompare(a.date)).forEach(e=>{
+      const i = expenseData.indexOf(e);
+      html += renderExpenseRow(e, i);
+    });
+  }
+
+  // 請求済みリスト
+  if(billed.length>0){
+    html += `<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin:1.25rem 0 8px;padding-left:4px">請求済み</div>`;
+    billed.sort((a,b)=>b.date.localeCompare(a.date)).forEach(e=>{
+      const i = expenseData.indexOf(e);
+      html += renderExpenseRow(e, i);
+    });
+  }
+
+  el.innerHTML = html;
+}
+
+function renderExpenseRow(e, i){
+  const billed = e.billed;
+  return `<div style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:6px;border:0.5px solid #e0e0e0;opacity:${billed?0.55:1}">
+    <div onclick="openExpenseForm(${i})" style="display:flex;justify-content:space-between;align-items:flex-start;cursor:pointer">
+      <div>
+        <div style="font-size:14px;font-weight:500;color:#1a1a1a">${e.name}</div>
+        <div style="font-size:12px;color:#888;margin-top:3px">${formatDate(e.date)}　${e.payee||''}</div>
+        ${billed && e.billedDate ? `<div style="font-size:11px;color:#aaa;margin-top:2px">請求済み：${formatDate(e.billedDate)}</div>` : ''}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:15px;font-weight:600;color:#1a1a1a">¥${formatYen(e.amount)}</div>
+        <div style="font-size:11px;color:${billed?'#aaa':'#1D9E75'};margin-top:3px">${billed?'請求済':'未請求'}</div>
+      </div>
+    </div>
+    <button onclick="event.stopPropagation();toggleExpenseBilled(${i})" style="margin-top:8px;width:100%;padding:7px;font-size:12px;border:0.5px solid ${billed?'#ccc':'#1D9E75'};border-radius:6px;background:${billed?'white':'#1D9E7510'};color:${billed?'#888':'#1D9E75'};cursor:pointer">${billed?'未請求に戻す':'請求済みにする'}</button>
+  </div>`;
+}
+
+function openExpenseForm(index){
+  editingExpenseIndex = index;
+  const modal = document.getElementById('expense-modal');
+  modal.style.display = 'flex';
+
+  if(index !== null && index !== undefined){
+    document.getElementById('ef-title').textContent = '費用を編集';
+    document.getElementById('ef-submit-btn').textContent = '更新する';
+    document.getElementById('ef-delete-btn').style.display = 'block';
+    const e = expenseData[index];
+    document.getElementById('ef-date').value = e.date;
+    document.getElementById('ef-name').value = e.name;
+    document.getElementById('ef-payee').value = e.payee||'';
+    document.getElementById('ef-amount').value = e.amount;
+  } else {
+    document.getElementById('ef-title').textContent = '費用を追加';
+    document.getElementById('ef-submit-btn').textContent = '追加する';
+    document.getElementById('ef-delete-btn').style.display = 'none';
+    document.getElementById('ef-date').value = new Date().toISOString().slice(0,10);
+    document.getElementById('ef-name').value = '';
+    document.getElementById('ef-payee').value = '';
+    document.getElementById('ef-amount').value = '';
+  }
+}
+
+function closeExpenseForm(e){
+  if(e && e.target !== document.getElementById('expense-modal')) return;
+  const modal = document.getElementById('expense-modal');
+  if(modal) modal.style.display = 'none';
+  renderExpense();
+}
+
+function submitExpense(){
+  const date = document.getElementById('ef-date').value;
+  const name = document.getElementById('ef-name').value.trim();
+  const payee = document.getElementById('ef-payee').value.trim();
+  const amount = parseFloat(document.getElementById('ef-amount').value);
+  if(!date||!name||isNaN(amount)){ customAlert('日付・項目名・費用は必須です'); return; }
+
+  if(editingExpenseIndex !== null && editingExpenseIndex !== undefined){
+    const existing = expenseData[editingExpenseIndex];
+    expenseData[editingExpenseIndex] = Object.assign({}, existing, {date:date, name:name, payee:payee, amount:amount});
+  } else {
+    expenseData.push({date, name, payee, amount, billed:false, billedDate:''});
+  }
+  saveExpenseToSheet();
+  document.getElementById('expense-modal').style.display='none';
+  renderExpense();
+}
+
+function deleteExpenseEditing(){
+  if(editingExpenseIndex===null) return;
+  customConfirm('この費用記録を削除しますか？',function(){
+    expenseData.splice(editingExpenseIndex,1);
+    saveExpenseToSheet();
+    document.getElementById('expense-modal').style.display='none';
+    renderExpense();
+  });
+}
+
+function toggleExpenseBilled(i){
+  const e = expenseData[i];
+  if(!e) return;
+  e.billed = !e.billed;
+  e.billedDate = e.billed ? new Date().toISOString().slice(0,10) : '';
+  saveExpenseToSheet();
+  renderExpense();
+}
+
+function markAllBilled(){
+  var count = 0;
+  var total = 0;
+  for(var i=0; i<expenseData.length; i++){
+    if(!expenseData[i].billed){
+      count++;
+      total += Number(expenseData[i].amount) || 0;
+    }
+  }
+  if(count === 0) return;
+  var msg = '未請求の' + count + '件（合計' + formatYen(total) + '円）をすべて請求済みにしますか？';
+  customConfirm(msg, function(){
+    var today = new Date().toISOString().slice(0,10);
+    for(var j=0; j<expenseData.length; j++){
+      if(!expenseData[j].billed){
+        expenseData[j].billed = true;
+        expenseData[j].billedDate = today;
+      }
+    }
+    saveExpenseToSheet();
+    renderExpense();
+  });
+}
+
+async function saveExpenseToSheet(){
+  try{
+    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveExpense',expenseData}),headers:{'Content-Type':'text/plain'}});
+  }catch(e){}
+}
+
 // updateProgressをlongterm/once対応に拡張
 const _origUpdateProgress = updateProgress;
 function updateAllProgress(){
@@ -1437,7 +1682,7 @@ function updateAllProgress(){
 loadFromSheet();
 startPolling();
 // ハッシュからタブを復元
-const validTabs=['arrive','leave','longterm','once','schedule'];
+const validTabs=['arrive','leave','longterm','once','schedule','expense'];
 const hashTab=location.hash.replace('#','');
 if(validTabs.includes(hashTab)) switchTab(hashTab);
 </script>
