@@ -1560,7 +1560,7 @@ function renderExpenseRow(e, i){
         <div style="font-size:11px;color:${billed?'#aaa':'#1D9E75'};margin-top:3px">${billed?'請求済':'未請求'}</div>
       </div>
     </div>
-    <button onclick="event.stopPropagation();toggleExpenseBilled(${i})" style="margin-top:8px;width:100%;padding:7px;font-size:12px;border:0.5px solid ${billed?'#ccc':'#1D9E75'};border-radius:6px;background:${billed?'white':'#1D9E7510'};color:${billed?'#888':'#1D9E75'};cursor:pointer">${billed?'未請求に戻す':'請求済みにする'}</button>
+    <button onclick="event.stopPropagation();toggleExpenseBilled(${i})" style="margin-top:8px;width:100%;padding:7px;font-size:12px;border:${billed?'1px solid #5080e8':'0.5px solid #1D9E75'};border-radius:6px;background:${billed?'#f0f4ff':'#1D9E7510'};color:${billed?'#5080e8':'#1D9E75'};cursor:pointer;font-weight:${billed?'500':'400'}">${billed?'未請求に戻す':'請求済みにする'}</button>
   </div>`;
 }
 
