@@ -261,6 +261,37 @@ canvas.scene-canvas { width: 100%; height: 150px; display: block; }
   </div>
 </div>
 
+<!-- 入金モーダル -->
+<div id="payment-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:flex-end;justify-content:center" onclick="closePaymentForm(event)">
+  <div style="background:#f5f5f3;border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span id="pf-title" style="font-size:15px;font-weight:500">入金を記録</span>
+      <button onclick="closePaymentForm()" style="font-size:20px;color:#aaa;background:none;border:none;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><div style="font-size:11px;color:#888;margin-bottom:4px">日付</div>
+        <input id="pf-date" type="date" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none">
+      </div>
+      <div><div style="font-size:11px;color:#888;margin-bottom:4px">金額（円）</div>
+        <input id="pf-amount" type="number" min="0" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="金額を入力">
+      </div>
+      <div style="font-size:11px;color:#888;margin-bottom:2px">クイック入力</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="addQuickPayment(10000)" style="flex:1;min-width:60px;padding:10px;border:0.5px solid #ccc;border-radius:8px;background:white;font-size:14px;cursor:pointer">+1万</button>
+        <button onclick="addQuickPayment(50000)" style="flex:1;min-width:60px;padding:10px;border:0.5px solid #ccc;border-radius:8px;background:white;font-size:14px;cursor:pointer">+5万</button>
+        <button onclick="addQuickPayment(100000)" style="flex:1;min-width:60px;padding:10px;border:0.5px solid #ccc;border-radius:8px;background:white;font-size:14px;cursor:pointer">+10万</button>
+      </div>
+      <div><div style="font-size:11px;color:#888;margin-bottom:4px">メモ（任意）</div>
+        <input id="pf-memo" style="width:100%;padding:10px;border:0.5px solid #ccc;border-radius:8px;font-size:14px;outline:none" placeholder="例：5月分まとめて">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="submitPayment()" style="flex:1;padding:12px;background:#1a1a1a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer" id="pf-submit-btn">記録する</button>
+      </div>
+      <button id="pf-delete-btn" onclick="deletePaymentEditing()" style="display:none;width:100%;padding:12px;background:white;color:#cc4040;border:1px solid #cc4040;border-radius:8px;font-size:14px;cursor:pointer">この入金記録を削除</button>
+    </div>
+  </div>
+</div>
+
 <!-- カスタムダイアログ -->
 <div id="custom-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:2000;justify-content:center;align-items:center">
   <div style="background:white;border-radius:16px;padding:24px 20px;width:90%;max-width:340px;text-align:center">
@@ -423,6 +454,7 @@ let data = JSON.parse(JSON.stringify(defaultData));
 let checked = { arrive: {}, leave: {}, longterm: {}, once: {} };
 let scheduleData = [];
 let expenseData = [];
+let paymentData = [];
 let isEditing = false;
 let currentTab = 'arrive';
 let dragSrc = null;
@@ -765,16 +797,21 @@ async function loadFromSheet(){
 
     // 費用データを復元
     if(payload.expense && Array.isArray(payload.expense)){
-      expenseData=payload.expense.map(e=>({
+      expenseData=payload.expense.map(function(e){ return {
         date: e.date||'',
         name: e.name||'',
         payee: e.payee||'',
-        amount: Number(e.amount)||0,
-        billed: e.billed===true||e.billed==='TRUE'||e.billed==='true',
-        billedDate: e.billedDate||''
-      }));
-      if(currentTab==='expense') renderExpense();
+        amount: Number(e.amount)||0
+      };});
     }
+    if(payload.payment && Array.isArray(payload.payment)){
+      paymentData=payload.payment.map(function(p){ return {
+        date: p.date||'',
+        amount: Number(p.amount)||0,
+        memo: p.memo||''
+      };});
+    }
+    if(currentTab==='expense') renderExpense();
 
     const rows=Array.isArray(payload) ? payload : (payload.rows||[]);
     if(!rows||rows.length===0){await saveToSheet();return;}
@@ -820,7 +857,7 @@ async function saveToSheet(){
     });
   });
   try{
-    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveAll',rows,scheduleData,expenseData}),headers:{'Content-Type':'text/plain'}});
+    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveAll',rows,scheduleData,expenseData,paymentData}),headers:{'Content-Type':'text/plain'}});
   }catch(e){}
 }
 
@@ -1427,22 +1464,8 @@ function renderMiniMonth(yr, mo, todayStr){
   const dayNames = ['日','月','火','水','木','金','土'];
   const dateKey = (d) => `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
-  const ventilation = {
-    0: null, 1: null, 2: null,
-    3: { label: '換気：月1回以上', color: '#1D9E75' },
-    4: { label: '換気：月1回以上', color: '#1D9E75' },
-    5: { label: '換気：月2回以上', color: '#e07030' },
-    6: { label: '換気：月1回以上', color: '#1D9E75' },
-    7: { label: '換気：月1回以上', color: '#1D9E75' },
-    8: { label: '換気：2ヶ月に1回', color: '#5080e8' },
-    9: { label: '換気：2ヶ月に1回', color: '#5080e8' },
-    10: null, 11: null,
-  };
-  const vent = ventilation[mo];
-  const ventBadge = vent ? `<span style="font-size:10px;font-weight:500;color:white;background:${vent.color};padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:middle">${vent.label}</span>` : '';
-
   let html = `<div style="background:white;border-radius:12px;padding:14px;margin-bottom:10px;border:0.5px solid #e8e8e6">
-    <div style="font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:10px">${yr}年 ${MONTHS[mo]}${ventBadge}</div>
+    <div style="font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:10px">${yr}年 ${MONTHS[mo]}</div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center">`;
   dayNames.forEach((d,i)=>{
     html+=`<div style="font-size:10px;color:${i===0?'#e85050':i===6?'#5080e8':'#aaa'};padding:2px 0">${d}</div>`;
@@ -1498,82 +1521,147 @@ async function saveScheduleToSheet(){
 
 // ---- 費用記録 ----
 let editingExpenseIndex = null;
+let editingPaymentIndex = null;
 
 function formatYen(n){
   return Number(n||0).toLocaleString('ja-JP');
 }
 
+// 費用の請求状態を入金ベースで計算
+function computeBillingStatus(){
+  var sorted = expenseData.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
+  var totalPaid = 0;
+  for(var i=0; i<paymentData.length; i++){
+    totalPaid += Number(paymentData[i].amount) || 0;
+  }
+  var remaining = totalPaid;
+  var result = [];
+  for(var i=0; i<sorted.length; i++){
+    var amt = Number(sorted[i].amount) || 0;
+    var paidAmount = 0;
+    if(remaining >= amt){
+      paidAmount = amt;
+      remaining -= amt;
+    } else if(remaining > 0){
+      paidAmount = remaining;
+      remaining = 0;
+    }
+    result.push({
+      expense: sorted[i],
+      originalIndex: expenseData.indexOf(sorted[i]),
+      paidAmount: paidAmount,
+      isFullyPaid: paidAmount >= amt,
+      isPartiallyPaid: paidAmount > 0 && paidAmount < amt
+    });
+  }
+  var totalExpense = 0;
+  for(var i=0; i<expenseData.length; i++){
+    totalExpense += Number(expenseData[i].amount) || 0;
+  }
+  return {
+    items: result,
+    totalExpense: totalExpense,
+    totalPaid: totalPaid,
+    overpaid: totalPaid > totalExpense ? totalPaid - totalExpense : 0,
+    unpaidTotal: totalExpense > totalPaid ? totalExpense - totalPaid : 0
+  };
+}
+
 function renderExpense(){
-  const el = document.getElementById('expense-content');
+  var el = document.getElementById('expense-content');
   if(!el) return;
+  var status = computeBillingStatus();
 
-  const unbilled = expenseData.filter(e=>!e.billed);
-  const billed = expenseData.filter(e=>e.billed);
-  const unbilledTotal = unbilled.reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+  var unpaidItems = status.items.filter(function(r){ return !r.isFullyPaid; });
+  var paidItems = status.items.filter(function(r){ return r.isFullyPaid; });
 
-  let html = `<div style="background:white;border-radius:12px;padding:16px;margin-bottom:1rem;border:0.5px solid #e8e8e6">
-    <div style="font-size:12px;color:#888;margin-bottom:4px">未請求の合計</div>
-    <div style="font-size:24px;font-weight:600;color:#1a1a1a">¥${formatYen(unbilledTotal)}</div>
-  </div>`;
+  // サマリー
+  var html = '<div style="display:flex;gap:8px;margin-bottom:1rem">';
+  html += '<div style="flex:1;background:white;border-radius:12px;padding:14px;border:0.5px solid #e8e8e6">';
+  html += '<div style="font-size:11px;color:#888;margin-bottom:4px">未請求残高</div>';
+  html += '<div style="font-size:22px;font-weight:600;color:' + (status.unpaidTotal > 0 ? '#D85A30' : '#1D9E75') + '">¥' + formatYen(status.unpaidTotal) + '</div>';
+  html += '</div>';
+  html += '<div style="flex:1;background:white;border-radius:12px;padding:14px;border:0.5px solid #e8e8e6">';
+  html += '<div style="font-size:11px;color:#888;margin-bottom:4px">入金済み合計</div>';
+  html += '<div style="font-size:22px;font-weight:600;color:#1D9E75">¥' + formatYen(status.totalPaid) + '</div>';
+  html += '</div></div>';
 
-  const disabledAttr = unbilled.length===0 ? 'disabled' : '';
-  const disabledStyle = unbilled.length===0 ? 'opacity:0.4;' : '';
-  html += `<div style="display:flex;gap:8px;margin-bottom:1rem">
-    <button onclick="openExpenseForm(null)" style="flex:1;padding:10px;font-size:13px;border:0.5px solid #ccc;border-radius:8px;background:white;cursor:pointer">＋ 費用を追加</button>
-    <button onclick="markAllBilled()" ${disabledAttr} style="flex:1;padding:10px;font-size:13px;border:none;border-radius:8px;background:#1a1a1a;color:white;cursor:pointer;${disabledStyle}">一括請求済みにする</button>
-  </div>`;
+  // 過払い表示
+  if(status.overpaid > 0){
+    html += '<div style="background:#e8f8f0;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:13px;color:#1D9E75;font-weight:500;border:1px solid #1D9E75">過払い金 ¥' + formatYen(status.overpaid) + '</div>';
+  }
+
+  // ボタン
+  html += '<div style="display:flex;gap:8px;margin-bottom:1.25rem">';
+  html += '<button onclick="openExpenseForm(null)" style="flex:1;padding:10px;font-size:13px;border:0.5px solid #ccc;border-radius:8px;background:white;cursor:pointer">＋ 費用を追加</button>';
+  html += '<button onclick="openPaymentForm(null)" style="flex:1;padding:10px;font-size:13px;border:none;border-radius:8px;background:#1D9E75;color:white;cursor:pointer">入金を記録</button>';
+  html += '</div>';
 
   // 未請求リスト
-  html += `<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;padding-left:4px">未請求</div>`;
-  if(unbilled.length===0){
-    html += `<p style="font-size:13px;color:#aaa;text-align:center;padding:1rem">未請求の費用はありません</p>`;
+  html += '<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;padding-left:4px">未請求</div>';
+  if(unpaidItems.length === 0 && status.overpaid === 0){
+    html += '<p style="font-size:13px;color:#aaa;text-align:center;padding:1rem">未請求の費用はありません</p>';
   } else {
-    unbilled.sort((a,b)=>b.date.localeCompare(a.date)).forEach(e=>{
-      const i = expenseData.indexOf(e);
-      html += renderExpenseRow(e, i);
-    });
+    for(var i=0; i<unpaidItems.length; i++){
+      var r = unpaidItems[i];
+      var e = r.expense;
+      var partialLabel = r.isPartiallyPaid ? '<div style="font-size:11px;color:#e07030;margin-top:2px">うち ¥' + formatYen(r.paidAmount) + ' 請求済み</div>' : '';
+      html += '<div onclick="openExpenseForm(' + r.originalIndex + ')" style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:6px;border-left:4px solid #D85A30;border-top:0.5px solid #e0e0e0;border-right:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;cursor:pointer">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+      html += '<div><div style="font-size:14px;font-weight:500;color:#1a1a1a">' + e.name + '</div>';
+      html += '<div style="font-size:12px;color:#888;margin-top:3px">' + formatDate(e.date) + '　' + (e.payee||'') + '</div>';
+      html += partialLabel + '</div>';
+      html += '<div style="text-align:right"><div style="font-size:15px;font-weight:600;color:#1a1a1a">¥' + formatYen(e.amount) + '</div>';
+      html += '<div style="font-size:11px;color:#D85A30;margin-top:3px">未請求</div></div>';
+      html += '</div></div>';
+    }
   }
 
   // 請求済みリスト
-  if(billed.length>0){
-    html += `<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin:1.25rem 0 8px;padding-left:4px">請求済み</div>`;
-    billed.sort((a,b)=>b.date.localeCompare(a.date)).forEach(e=>{
-      const i = expenseData.indexOf(e);
-      html += renderExpenseRow(e, i);
-    });
+  if(paidItems.length > 0){
+    html += '<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin:1.25rem 0 8px;padding-left:4px">請求済み</div>';
+    for(var i=0; i<paidItems.length; i++){
+      var r = paidItems[i];
+      var e = r.expense;
+      html += '<div onclick="openExpenseForm(' + r.originalIndex + ')" style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:6px;border-left:4px solid #1D9E75;border-top:0.5px solid #e0e0e0;border-right:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;opacity:0.55;cursor:pointer">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+      html += '<div><div style="font-size:14px;font-weight:500;color:#1a1a1a">' + e.name + '</div>';
+      html += '<div style="font-size:12px;color:#888;margin-top:3px">' + formatDate(e.date) + '　' + (e.payee||'') + '</div></div>';
+      html += '<div style="text-align:right"><div style="font-size:15px;font-weight:600;color:#1a1a1a">¥' + formatYen(e.amount) + '</div>';
+      html += '<div style="font-size:11px;color:#1D9E75;margin-top:3px">請求済</div></div>';
+      html += '</div></div>';
+    }
+  }
+
+  // 入金履歴
+  if(paymentData.length > 0){
+    var sortedPayments = paymentData.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    html += '<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin:1.25rem 0 8px;padding-left:4px">入金履歴</div>';
+    for(var i=0; i<sortedPayments.length; i++){
+      var p = sortedPayments[i];
+      var pi = paymentData.indexOf(p);
+      html += '<div onclick="openPaymentForm(' + pi + ')" style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:6px;border-left:4px solid #5080e8;border-top:0.5px solid #e0e0e0;border-right:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;cursor:pointer">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center">';
+      html += '<div><div style="font-size:14px;font-weight:500;color:#5080e8">入金</div>';
+      html += '<div style="font-size:12px;color:#888;margin-top:3px">' + formatDate(p.date) + (p.memo ? '　' + p.memo : '') + '</div></div>';
+      html += '<div style="font-size:15px;font-weight:600;color:#5080e8">+¥' + formatYen(p.amount) + '</div>';
+      html += '</div></div>';
+    }
   }
 
   el.innerHTML = html;
 }
 
-function renderExpenseRow(e, i){
-  const billed = e.billed;
-  return `<div style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:6px;border:0.5px solid #e0e0e0;opacity:${billed?0.55:1}">
-    <div onclick="openExpenseForm(${i})" style="display:flex;justify-content:space-between;align-items:flex-start;cursor:pointer">
-      <div>
-        <div style="font-size:14px;font-weight:500;color:#1a1a1a">${e.name}</div>
-        <div style="font-size:12px;color:#888;margin-top:3px">${formatDate(e.date)}　${e.payee||''}</div>
-        ${billed && e.billedDate ? `<div style="font-size:11px;color:#aaa;margin-top:2px">請求済み：${formatDate(e.billedDate)}</div>` : ''}
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:15px;font-weight:600;color:#1a1a1a">¥${formatYen(e.amount)}</div>
-        <div style="font-size:11px;color:${billed?'#aaa':'#1D9E75'};margin-top:3px">${billed?'請求済':'未請求'}</div>
-      </div>
-    </div>
-    <button onclick="event.stopPropagation();toggleExpenseBilled(${i})" style="margin-top:8px;width:100%;padding:7px;font-size:12px;border:${billed?'1px solid #5080e8':'0.5px solid #1D9E75'};border-radius:6px;background:${billed?'#f0f4ff':'#1D9E7510'};color:${billed?'#5080e8':'#1D9E75'};cursor:pointer;font-weight:${billed?'500':'400'}">${billed?'未請求に戻す':'請求済みにする'}</button>
-  </div>`;
-}
-
+// ---- 費用 CRUD ----
 function openExpenseForm(index){
   editingExpenseIndex = index;
-  const modal = document.getElementById('expense-modal');
+  var modal = document.getElementById('expense-modal');
   modal.style.display = 'flex';
-
   if(index !== null && index !== undefined){
     document.getElementById('ef-title').textContent = '費用を編集';
     document.getElementById('ef-submit-btn').textContent = '更新する';
     document.getElementById('ef-delete-btn').style.display = 'block';
-    const e = expenseData[index];
+    var e = expenseData[index];
     document.getElementById('ef-date').value = e.date;
     document.getElementById('ef-name').value = e.name;
     document.getElementById('ef-payee').value = e.payee||'';
@@ -1591,23 +1679,23 @@ function openExpenseForm(index){
 
 function closeExpenseForm(e){
   if(e && e.target !== document.getElementById('expense-modal')) return;
-  const modal = document.getElementById('expense-modal');
-  if(modal) modal.style.display = 'none';
+  document.getElementById('expense-modal').style.display = 'none';
   renderExpense();
 }
 
 function submitExpense(){
-  const date = document.getElementById('ef-date').value;
-  const name = document.getElementById('ef-name').value.trim();
-  const payee = document.getElementById('ef-payee').value.trim();
-  const amount = parseFloat(document.getElementById('ef-amount').value);
+  var date = document.getElementById('ef-date').value;
+  var name = document.getElementById('ef-name').value.trim();
+  var payee = document.getElementById('ef-payee').value.trim();
+  var amount = parseFloat(document.getElementById('ef-amount').value);
   if(!date||!name||isNaN(amount)){ customAlert('日付・項目名・費用は必須です'); return; }
-
   if(editingExpenseIndex !== null && editingExpenseIndex !== undefined){
-    const existing = expenseData[editingExpenseIndex];
-    expenseData[editingExpenseIndex] = Object.assign({}, existing, {date:date, name:name, payee:payee, amount:amount});
+    expenseData[editingExpenseIndex].date = date;
+    expenseData[editingExpenseIndex].name = name;
+    expenseData[editingExpenseIndex].payee = payee;
+    expenseData[editingExpenseIndex].amount = amount;
   } else {
-    expenseData.push({date, name, payee, amount, billed:false, billedDate:''});
+    expenseData.push({date:date, name:name, payee:payee, amount:amount});
   }
   saveExpenseToSheet();
   document.getElementById('expense-modal').style.display='none';
@@ -1624,42 +1712,70 @@ function deleteExpenseEditing(){
   });
 }
 
-function toggleExpenseBilled(i){
-  const e = expenseData[i];
-  if(!e) return;
-  e.billed = !e.billed;
-  e.billedDate = e.billed ? new Date().toISOString().slice(0,10) : '';
-  saveExpenseToSheet();
+// ---- 入金 CRUD ----
+function openPaymentForm(index){
+  editingPaymentIndex = index;
+  var modal = document.getElementById('payment-modal');
+  modal.style.display = 'flex';
+  if(index !== null && index !== undefined){
+    document.getElementById('pf-title').textContent = '入金を編集';
+    document.getElementById('pf-submit-btn').textContent = '更新する';
+    document.getElementById('pf-delete-btn').style.display = 'block';
+    var p = paymentData[index];
+    document.getElementById('pf-date').value = p.date;
+    document.getElementById('pf-amount').value = p.amount;
+    document.getElementById('pf-memo').value = p.memo||'';
+  } else {
+    document.getElementById('pf-title').textContent = '入金を記録';
+    document.getElementById('pf-submit-btn').textContent = '記録する';
+    document.getElementById('pf-delete-btn').style.display = 'none';
+    document.getElementById('pf-date').value = new Date().toISOString().slice(0,10);
+    document.getElementById('pf-amount').value = '';
+    document.getElementById('pf-memo').value = '';
+  }
+}
+
+function closePaymentForm(e){
+  if(e && e.target !== document.getElementById('payment-modal')) return;
+  document.getElementById('payment-modal').style.display = 'none';
   renderExpense();
 }
 
-function markAllBilled(){
-  var count = 0;
-  var total = 0;
-  for(var i=0; i<expenseData.length; i++){
-    if(!expenseData[i].billed){
-      count++;
-      total += Number(expenseData[i].amount) || 0;
-    }
+function addQuickPayment(amount){
+  var cur = parseInt(document.getElementById('pf-amount').value) || 0;
+  document.getElementById('pf-amount').value = cur + amount;
+}
+
+function submitPayment(){
+  var date = document.getElementById('pf-date').value;
+  var amount = parseFloat(document.getElementById('pf-amount').value);
+  var memo = document.getElementById('pf-memo').value.trim();
+  if(!date||isNaN(amount)||amount<=0){ customAlert('日付と金額は必須です'); return; }
+  if(editingPaymentIndex !== null && editingPaymentIndex !== undefined){
+    paymentData[editingPaymentIndex].date = date;
+    paymentData[editingPaymentIndex].amount = amount;
+    paymentData[editingPaymentIndex].memo = memo;
+  } else {
+    paymentData.push({date:date, amount:amount, memo:memo});
   }
-  if(count === 0) return;
-  var msg = '未請求の' + count + '件（合計' + formatYen(total) + '円）をすべて請求済みにしますか？';
-  customConfirm(msg, function(){
-    var today = new Date().toISOString().slice(0,10);
-    for(var j=0; j<expenseData.length; j++){
-      if(!expenseData[j].billed){
-        expenseData[j].billed = true;
-        expenseData[j].billedDate = today;
-      }
-    }
+  saveExpenseToSheet();
+  document.getElementById('payment-modal').style.display='none';
+  renderExpense();
+}
+
+function deletePaymentEditing(){
+  if(editingPaymentIndex===null) return;
+  customConfirm('この入金記録を削除しますか？',function(){
+    paymentData.splice(editingPaymentIndex,1);
     saveExpenseToSheet();
+    document.getElementById('payment-modal').style.display='none';
     renderExpense();
   });
 }
 
 async function saveExpenseToSheet(){
   try{
-    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveExpense',expenseData}),headers:{'Content-Type':'text/plain'}});
+    await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveExpense',expenseData:expenseData,paymentData:paymentData}),headers:{'Content-Type':'text/plain'}});
   }catch(e){}
 }
 
