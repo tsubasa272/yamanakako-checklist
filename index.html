@@ -1522,6 +1522,12 @@ async function saveScheduleToSheet(){
 // ---- 費用記録 ----
 let editingExpenseIndex = null;
 let editingPaymentIndex = null;
+let paidVisibleCount = 7;
+
+function showMorePaid(){
+  paidVisibleCount += 10;
+  renderExpense();
+}
 
 function formatYen(n){
   return Number(n||0).toLocaleString('ja-JP');
@@ -1619,9 +1625,12 @@ function renderExpense(){
 
   // 請求済みリスト
   if(paidItems.length > 0){
+    // 新しい順に並べ替え
+    var paidNewestFirst = paidItems.slice().reverse();
+    var shownCount = Math.min(paidVisibleCount, paidNewestFirst.length);
     html += '<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin:1.25rem 0 8px;padding-left:4px">請求済み</div>';
-    for(var i=0; i<paidItems.length; i++){
-      var r = paidItems[i];
+    for(var i=0; i<shownCount; i++){
+      var r = paidNewestFirst[i];
       var e = r.expense;
       html += '<div onclick="openExpenseForm(' + r.originalIndex + ')" style="background:white;border-radius:8px;padding:12px 14px;margin-bottom:6px;border-left:4px solid #1D9E75;border-top:0.5px solid #e0e0e0;border-right:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;opacity:0.55;cursor:pointer">';
       html += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
@@ -1630,6 +1639,12 @@ function renderExpense(){
       html += '<div style="text-align:right"><div style="font-size:15px;font-weight:600;color:#1a1a1a">¥' + formatYen(e.amount) + '</div>';
       html += '<div style="font-size:11px;color:#1D9E75;margin-top:3px">請求済</div></div>';
       html += '</div></div>';
+    }
+    // もっと見る
+    var hiddenCount = paidNewestFirst.length - shownCount;
+    if(hiddenCount > 0){
+      var nextCount = Math.min(10, hiddenCount);
+      html += '<button onclick="showMorePaid()" style="width:100%;padding:10px;margin-top:2px;font-size:13px;border:1px solid #5080e8;border-radius:8px;background:#f0f4ff;color:#5080e8;cursor:pointer;font-weight:500">もっと見る（あと' + hiddenCount + '件中 ' + nextCount + '件を表示）</button>';
     }
   }
 
